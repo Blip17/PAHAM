@@ -1,0 +1,441 @@
+// Quiz View for PAHAM
+// Multi-mode active recall engine with Quick, Topic, Weakness, Review, and Adaptive Generator modes
+
+import React, { useState, useEffect } from 'react';
+import { 
+  XCircle, 
+  HelpCircle, 
+  ArrowRight, 
+  RotateCcw, 
+  AlertTriangle, 
+  Check, 
+  BookOpen,
+  Sparkles,
+  Layers,
+  Filter,
+  Flame,
+  Target
+} from 'lucide-react';
+import confetti from 'canvas-confetti';
+import { db } from '../core/db';
+import { Question, Concept, MistakeRecord, QuestionOption, StudentConceptState } from '../core/types';
+import { ai } from '../services/ai/aiProvider';
+
+interface QuizViewProps {
+  initialConceptId?: string;
+  onFinishQuiz: () => void;
+  onStartLearnConcept: (conceptId: string) => void;
+}
+
+type QuizMode = 'quick' | 'topic' | 'weakness' | 'review' | 'generate';
+
+export const QuizView: React.FC<QuizViewProps> = ({
+  initialConceptId,
+  onFinishQuiz,
+  onStartLearnConcept,
+}) => {
+  const [allQuestions, setAllQuestions] = useState<Question[]>([]);
+  const [activeQuestions, setActiveQuestions] = useState<Question[]>([]);
+  const [concepts, setConcepts] = useState<Concept[]>([]);
+  const [studentStates, setStudentStates] = useState<StudentConceptState[]>([]);
+  
+  const [quizMode, setQuizMode] = useState<QuizMode>('quick');
+  const [selectedConceptId, setSelectedConceptId] = useState<string | undefined>(initialConceptId);
+  const [currentIndex, setCurrentIndex] = useState<number>(0);
+  const [selectedOptionId, setSelectedOptionId] = useState<string | null>(null);
+  const [isAnswered, setIsAnswered] = useState<boolean>(false);
+  const [userScore, setUserScore] = useState<number>(0);
+  const [quizFinished, setQuizFinished] = useState<boolean>(false);
+  const [mistakesMade, setMistakesMade] = useState<Array<{ question: Question; conceptTitle: string; userOptionText: string }>>([]);
+
+  // Dynamic question generation state
+  const [isGenerating, setIsGenerating] = useState<boolean>(false);
+
+  useEffect(() => {
+    async function loadData() {
+      const concs: Concept[] = await db.concepts.toArray();
+      const qs: Question[] = await db.questions.toArray();
+      const states: StudentConceptState[] = await db.studentConceptStates.toArray();
+
+      setConcepts(concs);
+      setAllQuestions(qs);
+      setStudentStates(states);
+
+      filterQuestionsByMode('quick', initialConceptId, qs, concs, states);
+    }
+    loadData();
+  }, [initialConceptId]);
+
+  const filterQuestionsByMode = (
+    mode: QuizMode, 
+    conceptId: string | undefined, 
+    qs: Question[], 
+    concs: Concept[], 
+    states: StudentConceptState[]
+  ) => {
+    let filtered: Question[] = [];
+    const stateMap = new Map(states.map(s => [s.conceptId, s]));
+
+    if (mode === 'topic' && conceptId) {
+      filtered = qs.filter(q => q.conceptId === conceptId);
+    } else if (mode === 'weakness') {
+      const weakConceptIds = new Set(
+        states.filter(s => s.masteryScore < 0.7 || s.commonMistakes.length > 0).map(s => s.conceptId)
+      );
+      filtered = qs.filter(q => weakConceptIds.has(q.conceptId));
+    } else if (mode === 'review') {
+      const dueConceptIds = new Set(
+        states.filter(s => new Date(s.fsrs.due) <= new Date()).map(s => s.conceptId)
+      );
+      filtered = qs.filter(q => dueConceptIds.has(q.conceptId));
+    }
+
+    if (filtered.length === 0) {
+      filtered = qs.slice(0, 5);
+    }
+
+    setActiveQuestions(filtered);
+    setCurrentIndex(0);
+    setSelectedOptionId(null);
+    setIsAnswered(false);
+    setUserScore(0);
+    setMistakesMade([]);
+    setQuizFinished(false);
+  };
+
+  const handleModeChange = (newMode: QuizMode) => {
+    setQuizMode(newMode);
+    filterQuestionsByMode(newMode, selectedConceptId, allQuestions, concepts, studentStates);
+  };
+
+  const handleGenerateAdaptiveQuestion = async () => {
+    const targetConcept = concepts.find(c => c.id === (selectedConceptId || concepts[0].id)) || concepts[0];
+    setIsGenerating(true);
+
+    try {
+      const newQuestion = await ai.generateQuestion({
+        subjectName: 'Bahasa Indonesia',
+        chapterTitle: 'Bab 5 Teks Fiksi',
+        conceptTitle: targetConcept.title,
+        conceptDefinition: targetConcept.definition,
+        difficulty: targetConcept.difficultyLevel || 3,
+        questionType: 'multiple_choice',
+      });
+
+      await db.questions.add(newQuestion);
+      setAllQuestions(prev => [newQuestion, ...prev]);
+      setActiveQuestions([newQuestion]);
+      setCurrentIndex(0);
+      setSelectedOptionId(null);
+      setIsAnswered(false);
+      setUserScore(0);
+      setQuizFinished(false);
+    } catch (err) {
+      console.error('Failed to generate adaptive question', err);
+    } finally {
+      setIsGenerating(false);
+    }
+  };
+
+  const currentQ = activeQuestions[currentIndex];
+  const conceptMap = new Map(concepts.map((c: Concept) => [c.id, c]));
+
+  const handleSelectOption = (optId: string) => {
+    if (isAnswered) return;
+    setSelectedOptionId(optId);
+  };
+
+  const handleConfirmAnswer = async () => {
+    if (!currentQ || !selectedOptionId || isAnswered) return;
+    setIsAnswered(true);
+
+    const chosenOption = currentQ.options?.find((o: QuestionOption) => o.id === selectedOptionId);
+    const isCorrect = Boolean(chosenOption?.isCorrect);
+
+    if (isCorrect) {
+      setUserScore(prev => prev + 1);
+    } else {
+      // Record mistake
+      const conc = conceptMap.get(currentQ.conceptId);
+      const correctOpt = currentQ.options?.find((o: QuestionOption) => o.isCorrect);
+
+      const mistake: MistakeRecord = {
+        id: `mst-${Date.now()}`,
+        conceptId: currentQ.conceptId,
+        conceptTitle: conc?.title || 'Materi',
+        subjectId: currentQ.subjectId,
+        questionPrompt: currentQ.prompt,
+        userGivenAnswer: chosenOption?.text || '',
+        correctAnswer: correctOpt?.text || '',
+        misconceptionDescription: currentQ.misconceptionAlert || 'Kekeliruan identifikasi konsep materi.',
+        dateOccurred: new Date().toISOString(),
+        isResolved: false,
+      };
+
+      await db.mistakeRecords.add(mistake);
+      setMistakesMade(prev => [...prev, {
+        question: currentQ,
+        conceptTitle: conc?.title || 'Materi',
+        userOptionText: chosenOption?.text || '',
+      }]);
+    }
+
+    // Record question stat
+    await db.questions.update(currentQ.id, {
+      timesAnswered: (currentQ.timesAnswered || 0) + 1,
+      timesCorrect: (currentQ.timesCorrect || 0) + (isCorrect ? 1 : 0),
+    });
+
+    await db.learningEvents.add({
+      id: `evt-${Date.now()}`,
+      timestamp: new Date().toISOString(),
+      eventType: 'QUESTION_ANSWERED',
+      conceptId: currentQ.conceptId,
+      metadata: { isCorrect, questionId: currentQ.id },
+    });
+  };
+
+  const handleNext = () => {
+    if (currentIndex < activeQuestions.length - 1) {
+      setCurrentIndex(prev => prev + 1);
+      setSelectedOptionId(null);
+      setIsAnswered(false);
+    } else {
+      setQuizFinished(true);
+      if (userScore >= Math.floor(activeQuestions.length * 0.7)) {
+        try {
+          confetti({ particleCount: 50, spread: 70, origin: { y: 0.7 } });
+        } catch {}
+      }
+    }
+  };
+
+  return (
+    <div className="max-w-3xl mx-auto space-y-6">
+      
+      {/* Header with Mode Selector */}
+      <div className="border-b border-paper-300 pb-4 space-y-3">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+          <div>
+            <h1 className="text-2xl sm:text-3xl font-serif text-ink-950 font-normal">
+              Latihan Mandiri
+            </h1>
+            <p className="text-xs text-ink-600 font-serif">
+              Drill konsep terarah dengan umpan balik langsung dan pencatatan mispersepsi.
+            </p>
+          </div>
+
+          <button
+            onClick={handleGenerateAdaptiveQuestion}
+            disabled={isGenerating}
+            className="btn-secondary text-xs py-1.5 px-3 self-start sm:self-auto text-moss-900 border-moss-300 bg-moss-50/50 hover:bg-moss-100 disabled:opacity-50"
+          >
+            <Sparkles className="w-3.5 h-3.5 text-moss-800" />
+            {isGenerating ? 'Menyusun Soal...' : 'Buat Soal Adaptif'}
+          </button>
+        </div>
+
+        {/* Mode Filter Tabs */}
+        <div className="flex items-center gap-1.5 overflow-x-auto pb-1 text-xs">
+          <button
+            onClick={() => handleModeChange('quick')}
+            className={`px-3 py-1.5 rounded font-medium transition ${
+              quizMode === 'quick' ? 'bg-ink-900 text-paper-50' : 'bg-paper-200 text-ink-700 hover:bg-paper-300'
+            }`}
+          >
+            Mode Cepat (5 Soal)
+          </button>
+          <button
+            onClick={() => handleModeChange('weakness')}
+            className={`px-3 py-1.5 rounded font-medium flex items-center gap-1.5 transition ${
+              quizMode === 'weakness' ? 'bg-terracotta-800 text-paper-50' : 'bg-paper-200 text-ink-700 hover:bg-paper-300'
+            }`}
+          >
+            <AlertTriangle className="w-3.5 h-3.5" />
+            Titik Rawan / Kelemahan
+          </button>
+          <button
+            onClick={() => handleModeChange('review')}
+            className={`px-3 py-1.5 rounded font-medium flex items-center gap-1.5 transition ${
+              quizMode === 'review' ? 'bg-amber-800 text-paper-50' : 'bg-paper-200 text-ink-700 hover:bg-paper-300'
+            }`}
+          >
+            <Flame className="w-3.5 h-3.5" />
+            FSRS Due Review
+          </button>
+        </div>
+      </div>
+
+      {/* QUIZ FINISHED REPORT */}
+      {quizFinished ? (
+        <div className="paper-sheet p-8 space-y-6 text-center">
+          <span className="text-xs font-mono uppercase tracking-wider text-moss-800 font-semibold block">
+            Latihan Selesai
+          </span>
+          
+          <div className="space-y-1">
+            <div className="text-4xl sm:text-5xl font-serif font-bold text-ink-950">
+              {Math.round((userScore / Math.max(1, activeQuestions.length)) * 100)}%
+            </div>
+            <p className="text-sm text-ink-600 font-serif">
+              {userScore} dari {activeQuestions.length} soal terjawab dengan benar.
+            </p>
+          </div>
+
+          {mistakesMade.length > 0 ? (
+            <div className="text-left bg-paper-100 p-4 rounded border border-paper-300 space-y-3">
+              <span className="text-xs font-semibold text-terracotta-900 uppercase tracking-wider block">
+                Konsep yang Perlu Kamu Ulang:
+              </span>
+              <div className="space-y-2">
+                {mistakesMade.map((m, idx) => (
+                  <div key={idx} className="p-2.5 rounded bg-paper-50 border border-paper-200 text-xs">
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="font-semibold text-ink-900">{m.conceptTitle}</span>
+                      <button
+                        onClick={() => onStartLearnConcept(m.question.conceptId)}
+                        className="text-moss-800 font-medium hover:underline text-[11px]"
+                      >
+                        Buka Modul →
+                      </button>
+                    </div>
+                    <p className="text-ink-600 text-[11px] leading-relaxed">
+                      {m.question.misconceptionAlert || 'Periksa kembali pembedaan konsep ini.'}
+                    </p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ) : (
+            <div className="p-4 rounded bg-moss-50 border border-moss-200 text-moss-900 text-xs sm:text-sm font-serif">
+              Luar biasa! Seluruh konsep pada sesi latihan ini berhasil kamu kuasai tanpa kekeliruan.
+            </div>
+          )}
+
+          <div className="flex items-center justify-center gap-3 pt-2">
+            <button
+              onClick={() => filterQuestionsByMode(quizMode, selectedConceptId, allQuestions, concepts, studentStates)}
+              className="btn-secondary text-xs py-2 px-4"
+            >
+              <RotateCcw className="w-3.5 h-3.5" />
+              Ulangi Sesi Ini
+            </button>
+            <button
+              onClick={onFinishQuiz}
+              className="btn-primary text-xs py-2 px-4 shadow-subtle"
+            >
+              Selesai
+            </button>
+          </div>
+        </div>
+      ) : currentQ ? (
+        /* ACTIVE QUESTION CARD */
+        <div className="paper-sheet p-6 sm:p-7 space-y-6">
+          
+          <div className="flex items-center justify-between pb-3 border-b border-paper-200 text-xs text-ink-500 font-mono">
+            <span className="uppercase text-moss-800 font-semibold">
+              {conceptMap.get(currentQ.conceptId)?.title || 'Materi'}
+            </span>
+            <span>
+              Soal {currentIndex + 1} dari {activeQuestions.length}
+            </span>
+          </div>
+
+          {/* Question Prompt */}
+          <div className="space-y-2">
+            <p className="text-sm sm:text-base font-serif text-ink-950 leading-relaxed whitespace-pre-line">
+              {currentQ.prompt}
+            </p>
+            {currentQ.sourceReference && (
+              <span className="text-[10px] font-mono text-ink-400 block">
+                Sumber: {currentQ.sourceReference}
+              </span>
+            )}
+          </div>
+
+          {/* Options */}
+          <div className="space-y-2.5">
+            {currentQ.options?.map((opt: QuestionOption) => {
+              const isSelected = selectedOptionId === opt.id;
+              let optStyle = 'border-paper-300 hover:bg-paper-100 text-ink-800';
+
+              if (isAnswered) {
+                if (opt.isCorrect) {
+                  optStyle = 'bg-moss-100 border-moss-700 text-moss-950 font-medium';
+                } else if (isSelected && !opt.isCorrect) {
+                  optStyle = 'bg-terracotta-100 border-terracotta-500 text-terracotta-900';
+                } else {
+                  optStyle = 'border-paper-200 opacity-50 text-ink-500';
+                }
+              } else if (isSelected) {
+                optStyle = 'bg-paper-200 border-moss-800 text-ink-950 font-medium';
+              }
+
+              return (
+                <button
+                  key={opt.id}
+                  onClick={() => handleSelectOption(opt.id)}
+                  disabled={isAnswered}
+                  className={`w-full p-3.5 rounded border text-left text-xs sm:text-sm transition flex items-start justify-between gap-3 ${optStyle}`}
+                >
+                  <span>{opt.text}</span>
+                  {isAnswered && opt.isCorrect && (
+                    <Check className="w-4 h-4 text-moss-700 shrink-0 mt-0.5" />
+                  )}
+                  {isAnswered && isSelected && !opt.isCorrect && (
+                    <XCircle className="w-4 h-4 text-terracotta-700 shrink-0 mt-0.5" />
+                  )}
+                </button>
+              );
+            })}
+          </div>
+
+          {/* Answer Rationale & Misconception Alert */}
+          {isAnswered && (
+            <div className="p-4 bg-paper-100 rounded border border-paper-300 space-y-2 text-xs text-ink-700 font-serif">
+              <div className="font-semibold text-ink-900 flex items-center gap-1.5">
+                <BookOpen className="w-3.5 h-3.5 text-moss-800" />
+                Penjelasan Materi:
+              </div>
+              <p className="leading-relaxed whitespace-pre-line">{currentQ.explanation}</p>
+              {currentQ.misconceptionAlert && (
+                <div className="pt-2 border-t border-paper-200 text-terracotta-900 text-[11px] font-sans font-medium flex items-start gap-1.5">
+                  <AlertTriangle className="w-3.5 h-3.5 text-terracotta-700 shrink-0 mt-0.5" />
+                  <span>{currentQ.misconceptionAlert}</span>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Action Button */}
+          <div className="pt-4 border-t border-paper-200 flex justify-end">
+            {!isAnswered ? (
+              <button
+                onClick={handleConfirmAnswer}
+                disabled={!selectedOptionId}
+                className="btn-primary text-xs py-2 px-5 disabled:opacity-50"
+              >
+                Jawab
+              </button>
+            ) : (
+              <button
+                onClick={handleNext}
+                className="btn-primary text-xs py-2 px-5 shadow-subtle"
+              >
+                {currentIndex < activeQuestions.length - 1 ? 'Soal Berikutnya' : 'Lihat Hasil'}
+                <ArrowRight className="w-4 h-4" />
+              </button>
+            )}
+          </div>
+
+        </div>
+      ) : (
+        <div className="paper-sheet p-12 text-center text-ink-500 font-serif">
+          <HelpCircle className="w-8 h-8 text-ink-400 mx-auto mb-2" />
+          <p>Tidak ada soal pada kategori ini.</p>
+        </div>
+      )}
+
+    </div>
+  );
+};

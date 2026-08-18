@@ -1,7 +1,8 @@
 // Main Application Root for PAHAM
-// Personal Adaptive Learning System for Indonesian Students
+// Integrated with @vercel/analytics/react, Local-First Dexie Database, and First-Time Onboarding Flow
 
 import React, { useState, useEffect } from 'react';
+import { Analytics } from '@vercel/analytics/react';
 import { AppShell } from './components/layout/AppShell';
 import { HomeView } from './views/HomeView';
 import { MaterialsView } from './views/MaterialsView';
@@ -12,124 +13,156 @@ import { ProgressView } from './views/ProgressView';
 import { SettingsView } from './views/SettingsView';
 import { ScanFlowModal } from './views/ScanFlowModal';
 import { StudyTimerModal } from './views/StudyTimerModal';
-import { initializeDatabaseSeed } from './core/db';
+import { OnboardingView } from './views/OnboardingView';
+import { db, initializeDatabaseSeed } from './core/db';
+import { UserProfile } from './core/types';
 
 export function App() {
-  const [currentTab, setCurrentTab] = useState<string>('home');
-  const [selectedConceptId, setSelectedConceptId] = useState<string | undefined>('c-penokohan');
-  const [selectedExamId, setSelectedExamId] = useState<string | undefined>('exam-bind-1');
-  
-  // Modals
+  const [activeTab, setActiveTab] = useState<string>('home');
+  const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
+  const [isLoadingProfile, setIsLoadingProfile] = useState<boolean>(true);
+
+  // Modal states
   const [isScanModalOpen, setIsScanModalOpen] = useState<boolean>(false);
   const [isTimerModalOpen, setIsTimerModalOpen] = useState<boolean>(false);
-  const [timerConceptTitle, setTimerConceptTitle] = useState<string>('Penokohan (Karakterisasi)');
-  const [timerPlannedMinutes, setTimerPlannedMinutes] = useState<number>(8);
+  const [activeTimerConceptTitle, setActiveTimerConceptTitle] = useState<string | null>(null);
+  const [activeTimerMinutes, setActiveTimerMinutes] = useState<number>(25);
 
-  // Background active timer tracker for layout
-  const [activeTimerConcept, setActiveTimerConcept] = useState<string | null>(null);
-  const [activeTimerSeconds, setActiveTimerSeconds] = useState<number>(480);
+  // Selected parameters for subviews
+  const [selectedConceptId, setSelectedConceptId] = useState<string | undefined>(undefined);
+  const [selectedExamId, setSelectedExamId] = useState<string | undefined>(undefined);
 
   useEffect(() => {
-    async function init() {
+    async function checkUserProfile() {
+      setIsLoadingProfile(true);
       await initializeDatabaseSeed();
+
+      const existingProfile = await db.profiles.toCollection().first();
+      if (existingProfile) {
+        setUserProfile(existingProfile);
+      }
+      setIsLoadingProfile(false);
     }
-    init();
+    checkUserProfile();
   }, []);
 
   const handleStartStudy = (conceptId?: string) => {
-    if (conceptId) setSelectedConceptId(conceptId);
-    setCurrentTab('learn');
+    setSelectedConceptId(conceptId);
+    setActiveTab('learn');
   };
 
   const handleOpenQuiz = (conceptId?: string) => {
-    if (conceptId) setSelectedConceptId(conceptId);
-    setCurrentTab('quiz');
+    setSelectedConceptId(conceptId);
+    setActiveTab('quiz');
   };
 
   const handleOpenExam = (examId: string) => {
     setSelectedExamId(examId);
-    setCurrentTab('exam');
+    setActiveTab('exam');
+  };
+
+  const handleMaterialCreated = (_newMaterialId: string) => {
+    setActiveTab('materials');
   };
 
   const handleOpenTimer = (conceptTitle?: string, minutes?: number) => {
-    if (conceptTitle) setTimerConceptTitle(conceptTitle);
-    if (minutes) setTimerPlannedMinutes(minutes);
+    if (conceptTitle) setActiveTimerConceptTitle(conceptTitle);
+    if (minutes) setActiveTimerMinutes(minutes);
     setIsTimerModalOpen(true);
   };
 
-  const handleMaterialCreated = (newMaterialId: string) => {
-    setCurrentTab('materials');
-  };
+  // Loading state
+  if (isLoadingProfile) {
+    return (
+      <div className="min-h-screen bg-paper-100 flex items-center justify-center font-serif text-ink-600">
+        Menyiapkan PAHAM...
+      </div>
+    );
+  }
+
+  // If no user profile exists, present the Onboarding Setup Wizard first
+  if (!userProfile) {
+    return (
+      <>
+        <OnboardingView
+          onComplete={(newProfile) => {
+            setUserProfile(newProfile);
+            setActiveTab('home');
+          }}
+        />
+        <Analytics />
+      </>
+    );
+  }
 
   return (
-    <AppShell
-      currentTab={currentTab}
-      onSelectTab={setCurrentTab}
-      onOpenScan={() => setIsScanModalOpen(true)}
-      onStartStudy={handleStartStudy}
-      onOpenTimer={handleOpenTimer}
-      activeTimerConcept={activeTimerConcept}
-      activeTimerSeconds={activeTimerSeconds}
-    >
-      {/* 1. HOME / TODAY */}
-      {currentTab === 'home' && (
-        <HomeView
-          onStartStudy={handleStartStudy}
-          onOpenScan={() => setIsScanModalOpen(true)}
-          onOpenQuiz={handleOpenQuiz}
-          onOpenExam={handleOpenExam}
-          onOpenMaterials={() => setCurrentTab('materials')}
-        />
-      )}
+    <>
+      <AppShell
+        currentTab={activeTab}
+        onSelectTab={(tab: string) => {
+          setActiveTab(tab);
+          if (tab !== 'learn') setSelectedConceptId(undefined);
+          if (tab !== 'exam') setSelectedExamId(undefined);
+        }}
+        onOpenScan={() => setIsScanModalOpen(true)}
+        onStartStudy={handleStartStudy}
+        onOpenTimer={handleOpenTimer}
+        activeTimerConcept={activeTimerConceptTitle}
+        activeTimerSeconds={activeTimerMinutes * 60}
+      >
+        {activeTab === 'home' && (
+          <HomeView
+            onStartStudy={handleStartStudy}
+            onOpenScan={() => setIsScanModalOpen(true)}
+            onOpenQuiz={handleOpenQuiz}
+            onOpenExam={handleOpenExam}
+            onOpenMaterials={() => setActiveTab('materials')}
+          />
+        )}
 
-      {/* 2. LEARN ACTIVE CANVAS */}
-      {currentTab === 'learn' && (
-        <LearnView
-          initialConceptId={selectedConceptId}
-          onFinishSession={() => setCurrentTab('home')}
-          onOpenTimer={handleOpenTimer}
-        />
-      )}
+        {activeTab === 'materials' && (
+          <MaterialsView
+            onStartStudyConcept={handleStartStudy}
+            onOpenScanModal={() => setIsScanModalOpen(true)}
+          />
+        )}
 
-      {/* 3. MATERIAL LIBRARY & ARCHIVE */}
-      {currentTab === 'materials' && (
-        <MaterialsView
-          onStartStudyConcept={handleStartStudy}
-          onOpenScanModal={() => setIsScanModalOpen(true)}
-        />
-      )}
+        {activeTab === 'learn' && (
+          <LearnView
+            initialConceptId={selectedConceptId}
+            onFinishSession={() => setActiveTab('home')}
+            onOpenTimer={handleOpenTimer}
+          />
+        )}
 
-      {/* 4. QUIZ ACTIVE DRILL */}
-      {currentTab === 'quiz' && (
-        <QuizView
-          initialConceptId={selectedConceptId}
-          onFinishQuiz={() => setCurrentTab('home')}
-          onStartLearnConcept={handleStartStudy}
-        />
-      )}
+        {activeTab === 'quiz' && (
+          <QuizView
+            initialConceptId={selectedConceptId}
+            onFinishQuiz={() => setActiveTab('home')}
+            onStartLearnConcept={handleStartStudy}
+          />
+        )}
 
-      {/* 5. EXAM SIMULATION */}
-      {currentTab === 'exam' && (
-        <ExamSimulationView
-          initialExamId={selectedExamId}
-          onFinishExam={() => setCurrentTab('home')}
-          onStartLearnConcept={handleStartStudy}
-        />
-      )}
+        {activeTab === 'exam' && (
+          <ExamSimulationView
+            initialExamId={selectedExamId}
+            onFinishExam={() => setActiveTab('home')}
+            onStartLearnConcept={handleStartStudy}
+          />
+        )}
 
-      {/* 6. PROGRESS & EVIDENCE */}
-      {currentTab === 'progress' && (
-        <ProgressView
-          onStartLearnConcept={handleStartStudy}
-        />
-      )}
+        {activeTab === 'progress' && (
+          <ProgressView
+            onStartLearnConcept={handleStartStudy}
+          />
+        )}
 
-      {/* 7. SETTINGS & PROFILE */}
-      {currentTab === 'settings' && (
-        <SettingsView />
-      )}
+        {activeTab === 'settings' && (
+          <SettingsView />
+        )}
+      </AppShell>
 
-      {/* MODALS */}
+      {/* Global Modals */}
       <ScanFlowModal
         isOpen={isScanModalOpen}
         onClose={() => setIsScanModalOpen(false)}
@@ -139,10 +172,13 @@ export function App() {
       <StudyTimerModal
         isOpen={isTimerModalOpen}
         onClose={() => setIsTimerModalOpen(false)}
-        conceptTitle={timerConceptTitle}
-        plannedMinutes={timerPlannedMinutes}
+        conceptTitle={activeTimerConceptTitle || 'Sesi Belajar Terfokus'}
+        plannedMinutes={activeTimerMinutes}
       />
-    </AppShell>
+
+      {/* Vercel Analytics Tracker */}
+      <Analytics />
+    </>
   );
 }
 

@@ -407,15 +407,25 @@ export const HomeView: React.FC<HomeViewProps> = ({
                     Mulai Simulasi Ujian
                   </button>
 
-                  {examReadiness.diffDays <= 3 && allConcepts.length > 0 && (
-                    <button
-                      onClick={() => onStartStudy(allConcepts[0].id)}
-                      className="w-full btn-secondary py-2 text-xs justify-center text-terracotta-900 border-terracotta-300 bg-terracotta-50/50 hover:bg-terracotta-100"
-                    >
-                      <LifeBuoy className="w-3.5 h-3.5 text-terracotta-700" />
-                      Sesi Penyelamatan (Rescue Mode)
-                    </button>
-                  )}
+                  {examReadiness.diffDays <= 3 && allConcepts.length > 0 && (() => {
+                    // Find the weakest concept by mastery score for real rescue targeting
+                    const weakestConcept = allConcepts.reduce((weakest, c) => {
+                      const stateA = studentStatesMap.get(c.id);
+                      const stateB = studentStatesMap.get(weakest.id);
+                      const scoreA = stateA?.masteryScore ?? 0;
+                      const scoreB = stateB?.masteryScore ?? 0;
+                      return scoreA < scoreB ? c : weakest;
+                    }, allConcepts[0]);
+                    return (
+                      <button
+                        onClick={() => onStartStudy(weakestConcept.id)}
+                        className="w-full btn-secondary py-2 text-xs justify-center text-terracotta-900 border-terracotta-300 bg-terracotta-50/50 hover:bg-terracotta-100"
+                      >
+                        <LifeBuoy className="w-3.5 h-3.5 text-terracotta-700" />
+                        Sesi Penyelamatan: {weakestConcept.title}
+                      </button>
+                    );
+                  })()}
                 </div>
               </div>
             )}

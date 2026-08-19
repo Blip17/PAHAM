@@ -14,7 +14,7 @@ import {
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { db } from '../core/db';
-import { Exam, Question, ExamAttempt } from '../core/types';
+import { Exam, Question, ExamAttempt, Concept } from '../core/types';
 
 interface ExamSimulationViewProps {
   initialExamId?: string;
@@ -41,11 +41,14 @@ export const ExamSimulationView: React.FC<ExamSimulationViewProps> = ({
 
   // Result Analytics
   const [attemptResult, setAttemptResult] = useState<ExamAttempt | null>(null);
-  const [previousReadiness, setPreviousReadiness] = useState<number>(76);
+  const [previousReadiness, setPreviousReadiness] = useState<number>(0);
+  const [allConcepts, setAllConcepts] = useState<Concept[]>([]);
 
   useEffect(() => {
     async function loadExamData() {
       const allExams: Exam[] = await db.exams.toArray();
+      const concepts: Concept[] = await db.concepts.toArray();
+      setAllConcepts(concepts);
 
       let target = allExams[0];
       if (initialExamId) {
@@ -56,7 +59,8 @@ export const ExamSimulationView: React.FC<ExamSimulationViewProps> = ({
 
       if (target) {
         setSecondsRemaining(target.durationMinutes * 60);
-        setPreviousReadiness(target.readinessScore || 76);
+        // Use real stored readiness or default to 0 for new exams
+        setPreviousReadiness(target.readinessScore ?? 0);
         // Load questions for covered chapters
         const qs: Question[] = await db.questions.toArray();
         const coveredQs = qs.filter((q: Question) => target.coveredChapterIds.includes(q.chapterId));
@@ -149,7 +153,12 @@ export const ExamSimulationView: React.FC<ExamSimulationViewProps> = ({
       correctAnswersCount: correctCount,
       strongConceptIds: strongConcepts,
       weakConceptIds: weakConcepts,
-      commonMistakeSummaries: weakConcepts.length > 0 ? ['Kekeliruan penentuan metode penokohan dan gagasan pokok'] : [],
+      commonMistakeSummaries: weakConcepts.length > 0
+        ? weakConcepts.slice(0, 3).map(cId => {
+            const concept = allConcepts.find(c => c.id === cId);
+            return concept ? `Perlu memperkuat: ${concept.title}` : `Konsep ${cId} masih lemah`;
+          })
+        : [],
       recommendedFollowupMinutes: 12,
       answers: [],
     };
@@ -220,7 +229,7 @@ export const ExamSimulationView: React.FC<ExamSimulationViewProps> = ({
             </div>
             <div className="p-3 bg-paper-100 rounded">
               <span className="text-[10px] font-mono uppercase text-ink-400 font-semibold block">Cakupan Materi</span>
-              <span className="text-lg font-serif font-bold text-moss-900">Bab 4–5</span>
+              <span className="text-lg font-serif font-bold text-moss-900">{selectedExam.coveredChapterIds.length} Bab</span>
             </div>
           </div>
 
@@ -414,6 +423,19 @@ export const ExamSimulationView: React.FC<ExamSimulationViewProps> = ({
   // 3. DIAGNOSTIC SCORE REPORT AFTER SUBMISSION
   // ----------------------------------------------------
   if (examState === 'submitted' && attemptResult) {
+    const newReadiness = Math.min(98, Math.max(40, Math.round((previousReadiness + attemptResult.scorePercentage) / 2)));
+    const strongConceptObjects = attemptResult.strongConceptIds
+      .map(id => allConcepts.find(c => c.id === id))
+      .filter(Boolean) as Concept[];
+    const weakConceptObjects = attemptResult.weakConceptIds
+      .map(id => allConcepts.find(c => c.id === id))
+      .filter(Boolean) as Concept[];
+
+    const topWeakConcepts = weakConceptObjects.slice(0, 3);
+    const recommendedMinutes = topWeakConcepts.length > 0
+      ? topWeakConcepts.length * 8
+      : 10;
+
     return (
       <div className="max-w-3xl mx-auto space-y-6">
         
@@ -442,13 +464,15 @@ export const ExamSimulationView: React.FC<ExamSimulationViewProps> = ({
             <div>
               <span className="text-moss-800 font-mono block text-[10px] uppercase font-bold">Kesiapan Baru</span>
               <span className="text-lg font-serif font-bold text-moss-900">
-                {Math.min(98, Math.max(40, Math.round((previousReadiness + attemptResult.scorePercentage) / 2)))}% SIAP
+                {newReadiness}% SIAP
               </span>
             </div>
           </div>
 
           <p className="text-xs sm:text-sm text-ink-700 font-serif italic max-w-md mx-auto">
-            "Kamu sudah cukup siap, namun masih ada beberapa titik rawan yang perlu kamu perkuat sebelum hari ujian sesungguhnya."
+            {attemptResult.scorePercentage >= 75
+              ? '"Kamu sudah cukup siap. Pertahankan dan perkuat konsep yang masih lemah sebelum hari ujian."'
+              : '"Masih ada beberapa titik rawan yang perlu kamu perkuat. Fokuslah pada konsep-konsep di bawah ini."'}
           </p>
         </div>
 
@@ -459,51 +483,53 @@ export const ExamSimulationView: React.FC<ExamSimulationViewProps> = ({
           <div className="paper-sheet p-5 space-y-3 border-t-4 border-t-moss-700">
             <div className="flex items-center gap-2 text-moss-900 font-semibold text-xs uppercase tracking-wider">
               <CheckCircle className="w-4 h-4 text-moss-700" />
-              Konsep Kuat / Stabil
+              Konsep Kuat / Stabil ({strongConceptObjects.length})
             </div>
-            <ul className="space-y-2 text-xs text-ink-800 font-sans">
-              <li className="p-2 bg-paper-100 rounded border border-paper-200">
-                ✓ Tokoh & Karakter Dasar (100% Akurat)
-              </li>
-              <li className="p-2 bg-paper-100 rounded border border-paper-200">
-                ✓ Alur & Latar Cerita Fiksi (90% Akurat)
-              </li>
-            </ul>
+            {strongConceptObjects.length > 0 ? (
+              <ul className="space-y-2 text-xs text-ink-800 font-sans">
+                {strongConceptObjects.slice(0, 5).map(c => (
+                  <li key={c.id} className="p-2 bg-paper-100 rounded border border-paper-200">
+                    ✓ {c.title}
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="text-xs text-ink-500 font-serif italic">
+                {questions.length === 0
+                  ? 'Tidak ada soal yang bisa dinilai dalam simulasi ini.'
+                  : 'Belum ada konsep yang dikuasai penuh. Terus berlatih!'}
+              </p>
+            )}
           </div>
 
           {/* Weak Concepts (Need Reinforcement) */}
           <div className="paper-sheet p-5 space-y-3 border-t-4 border-t-terracotta-700">
             <div className="flex items-center gap-2 text-terracotta-900 font-semibold text-xs uppercase tracking-wider">
               <AlertTriangle className="w-4 h-4 text-terracotta-700" />
-              Perlu Diperkuat
+              Perlu Diperkuat ({weakConceptObjects.length})
             </div>
-            <div className="space-y-2 text-xs">
-              <div className="p-2.5 bg-terracotta-50 rounded border border-terracotta-200 flex items-center justify-between">
-                <div>
-                  <span className="font-semibold text-ink-900 block">Penokohan (Metode Analitik vs Dramatik)</span>
-                  <span className="text-[11px] text-terracotta-800">Sering tertukar penentuan sifat langsung</span>
-                </div>
-                <button
-                  onClick={() => onStartLearnConcept('c-penokohan')}
-                  className="btn-primary text-[10px] py-1 px-2 shrink-0 bg-moss-900"
-                >
-                  Belajar
-                </button>
+            {topWeakConcepts.length > 0 ? (
+              <div className="space-y-2 text-xs">
+                {topWeakConcepts.map(c => (
+                  <div key={c.id} className="p-2.5 bg-terracotta-50 rounded border border-terracotta-200 flex items-center justify-between gap-2">
+                    <div>
+                      <span className="font-semibold text-ink-900 block">{c.title}</span>
+                      <span className="text-[11px] text-terracotta-800 line-clamp-1">{c.definition?.slice(0, 80)}</span>
+                    </div>
+                    <button
+                      onClick={() => onStartLearnConcept(c.id)}
+                      className="btn-primary text-[10px] py-1 px-2 shrink-0 bg-moss-900"
+                    >
+                      Belajar
+                    </button>
+                  </div>
+                ))}
               </div>
-
-              <div className="p-2.5 bg-terracotta-50 rounded border border-terracotta-200 flex items-center justify-between">
-                <div>
-                  <span className="font-semibold text-ink-900 block">Gagasan Utama Paragraf</span>
-                  <span className="text-[11px] text-terracotta-800">Memilih kalimat penjelas</span>
-                </div>
-                <button
-                  onClick={() => onStartLearnConcept('c-gagasan-utama')}
-                  className="btn-primary text-[10px] py-1 px-2 shrink-0 bg-moss-900"
-                >
-                  Belajar
-                </button>
-              </div>
-            </div>
+            ) : (
+              <p className="text-xs text-moss-700 font-serif italic">
+                Semua konsep yang diuji sudah dikuasai. Luar biasa!
+              </p>
+            )}
           </div>
 
         </div>
@@ -515,7 +541,9 @@ export const ExamSimulationView: React.FC<ExamSimulationViewProps> = ({
               Rencana Belajar Berikutnya
             </span>
             <p className="font-serif text-base text-ink-950 font-medium mt-0.5">
-              12 menit sesi review besok untuk mempertajam konsep Penokohan.
+              {topWeakConcepts.length > 0
+                ? `${recommendedMinutes} menit sesi review untuk memperkuat ${topWeakConcepts.map(c => c.title).join(', ')}.`
+                : 'Pertahankan performa ini dengan sesi review ringan 10 menit besok.'}
             </p>
           </div>
 

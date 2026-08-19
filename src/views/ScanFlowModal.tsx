@@ -20,6 +20,7 @@ import {
 import { db } from '../core/db';
 import { Material, MaterialBlock, Subject, Chapter } from '../core/types';
 import { ai } from '../services/ai/aiProvider';
+import { extractAndPersistConcepts } from '../services/conceptService';
 
 interface ScanFlowModalProps {
   isOpen: boolean;
@@ -41,8 +42,8 @@ export const ScanFlowModal: React.FC<ScanFlowModalProps> = ({
   // Dynamic Subjects & Chapters from Database
   const [subjects, setSubjects] = useState<Subject[]>([]);
   const [chapters, setChapters] = useState<Chapter[]>([]);
-  const [selectedSubjectId, setSelectedSubjectId] = useState<string>('sub-bind');
-  const [selectedChapterId, setSelectedChapterId] = useState<string>('chap-bind-5');
+  const [selectedSubjectId, setSelectedSubjectId] = useState<string>('');
+  const [selectedChapterId, setSelectedChapterId] = useState<string>('');
   
   // Inline Creation of New Subject / Chapter
   const [isAddingNewSubject, setIsAddingNewSubject] = useState<boolean>(false);
@@ -59,11 +60,9 @@ export const ScanFlowModal: React.FC<ScanFlowModalProps> = ({
   const [uploadedImagePreview, setUploadedImagePreview] = useState<string | null>(null);
   
   // OCR & Pipeline States
-  const [rawText, setRawText] = useState<string>(
-    'Bab 5: Penokohan cerita fiksi. Penokohan ada 2 cara: 1. Analitik (pengarang langsung sebut watak), 2. Dramatik (lewat dialog/tindakan tokoh). Tokoh adalah pemeran fisik dlm cerita.'
-  );
+  const [rawText, setRawText] = useState<string>('');
   const [processingStep, setProcessingStep] = useState<number>(0);
-  const [extractedConcepts, setExtractedConcepts] = useState<string[]>(['Penokohan', 'Metode Analitik & Dramatik', 'Tokoh']);
+  const [extractedConcepts, setExtractedConcepts] = useState<string[]>([]);
   const [cleanedText, setCleanedText] = useState<string>('');
   const [isAiEnhanced, setIsAiEnhanced] = useState<boolean>(false);
 
@@ -228,15 +227,22 @@ export const ScanFlowModal: React.FC<ScanFlowModalProps> = ({
   };
 
   const startPipeline = async (withAi: boolean = false) => {
+    // Validate: need at least some text to process
+    const textToProcess = rawText.trim();
+    if (!textToProcess && !uploadedImagePreview) {
+      alert('Mohon masukkan teks catatan atau unggah foto catatan terlebih dahulu.');
+      return;
+    }
+
     stopCamera();
     setStage('processing');
-    setProcessingStep(1); // Membaca halaman & OCR
+    setProcessingStep(1); // Reading / OCR
 
-    await new Promise(r => setTimeout(r, 600));
-    setProcessingStep(2); // Menemukan konsep
+    await new Promise(r => setTimeout(r, 500));
+    setProcessingStep(2); // Finding concepts
 
-    await new Promise(r => setTimeout(r, 600));
-    setProcessingStep(3); // Merapikan materi
+    await new Promise(r => setTimeout(r, 500));
+    setProcessingStep(3); // Cleaning text
 
     if (sourceType === 'catatan_guru' && !withAi) {
       setStage('permission_gate');
@@ -245,12 +251,12 @@ export const ScanFlowModal: React.FC<ScanFlowModalProps> = ({
 
     const currentSub = subjects.find(s => s.id === selectedSubjectId);
     const result = await ai.extractHandwriting({
-      rawOcrSnippet: rawText,
+      rawOcrSnippet: textToProcess || `[Foto catatan: ${materialTitle}]`,
       subjectName: currentSub?.name || 'Mata Pelajaran',
     });
 
     setCleanedText(result.cleanedText);
-    setExtractedConcepts(result.detectedConcepts);
+    setExtractedConcepts(result.detectedConcepts.length > 0 ? result.detectedConcepts : []);
     setIsAiEnhanced(result.isAiEnhanced);
 
     setProcessingStep(4);
@@ -292,6 +298,11 @@ export const ScanFlowModal: React.FC<ScanFlowModalProps> = ({
 
     await db.materials.add(newMat);
 
+    // === REAL CONCEPT EXTRACTION ===
+    // Extract and persist Concept records from this material's text.
+    // This powers the Quiz, Learn, FSRS review, and Study Planner flows.
+    await extractAndPersistConcepts(newMat);
+
     // Save learning event
     const currentSub = subjects.find(s => s.id === selectedSubjectId);
     await db.learningEvents.add({
@@ -306,8 +317,15 @@ export const ScanFlowModal: React.FC<ScanFlowModalProps> = ({
     setTimeout(() => {
       onMaterialCreated(newMaterialId);
       onClose();
+      // Reset form state for next use
       setStage('input');
       setUploadedImagePreview(null);
+      setRawText('');
+      setCleanedText('');
+      setExtractedConcepts([]);
+      setIsAiEnhanced(false);
+      setMaterialTitle('Catatan Guru: Tambahan Materi');
+      setProcessingStep(0);
     }, 1000);
   };
 

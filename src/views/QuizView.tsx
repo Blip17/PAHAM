@@ -109,18 +109,34 @@ export const QuizView: React.FC<QuizViewProps> = ({
   };
 
   const handleGenerateAdaptiveQuestion = async () => {
-    const targetConcept = concepts.find(c => c.id === (selectedConceptId || concepts[0].id)) || concepts[0];
+    const targetConcept = concepts.find(c => c.id === (selectedConceptId || concepts[0]?.id)) || concepts[0];
+    if (!targetConcept) return;
     setIsGenerating(true);
+
+    // Resolve real subject and chapter names from DB
+    let subjectName = 'Mata Pelajaran';
+    let chapterTitle = 'Materi Pokok';
+    try {
+      const sub = await db.subjects.get(targetConcept.subjectId);
+      const chap = await db.chapters.get(targetConcept.chapterId);
+      if (sub) subjectName = sub.name;
+      if (chap) chapterTitle = chap.title;
+    } catch {}
 
     try {
       const newQuestion = await ai.generateQuestion({
-        subjectName: 'Bahasa Indonesia',
-        chapterTitle: 'Bab 5 Teks Fiksi',
+        subjectName,
+        chapterTitle,
         conceptTitle: targetConcept.title,
         conceptDefinition: targetConcept.definition,
         difficulty: targetConcept.difficultyLevel || 3,
         questionType: 'multiple_choice',
       });
+
+      // Assign real IDs before saving
+      newQuestion.subjectId = targetConcept.subjectId;
+      newQuestion.chapterId = targetConcept.chapterId;
+      newQuestion.conceptId = targetConcept.id;
 
       await db.questions.add(newQuestion);
       setAllQuestions(prev => [newQuestion, ...prev]);

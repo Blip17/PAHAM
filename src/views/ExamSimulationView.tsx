@@ -10,11 +10,13 @@ import {
   AlertTriangle, 
   ArrowRight, 
   ChevronLeft, 
-  ChevronRight
+  ChevronRight,
+  Sparkles
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { db } from '../core/db';
 import { Exam, Question, ExamAttempt, Concept } from '../core/types';
+import { StudyAssistantDrawer } from '../components/study/StudyAssistantDrawer';
 
 interface ExamSimulationViewProps {
   initialExamId?: string;
@@ -43,6 +45,10 @@ export const ExamSimulationView: React.FC<ExamSimulationViewProps> = ({
   const [attemptResult, setAttemptResult] = useState<ExamAttempt | null>(null);
   const [previousReadiness, setPreviousReadiness] = useState<number>(0);
   const [allConcepts, setAllConcepts] = useState<Concept[]>([]);
+
+  // Study Assistant State (Active post-exam only)
+  const [isAssistantOpen, setIsAssistantOpen] = useState<boolean>(false);
+  const [assistantConcept, setAssistantConcept] = useState<Concept | null>(null);
 
   useEffect(() => {
     async function loadExamData() {
@@ -516,12 +522,26 @@ export const ExamSimulationView: React.FC<ExamSimulationViewProps> = ({
                       <span className="font-semibold text-ink-900 block">{c.title}</span>
                       <span className="text-[11px] text-terracotta-800 line-clamp-1">{c.definition?.slice(0, 80)}</span>
                     </div>
-                    <button
-                      onClick={() => onStartLearnConcept(c.id)}
-                      className="btn-primary text-[10px] py-1 px-2 shrink-0 bg-moss-900"
-                    >
-                      Belajar
-                    </button>
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setAssistantConcept(c);
+                          setIsAssistantOpen(true);
+                        }}
+                        className="btn-secondary text-[10px] py-1 px-2 text-moss-900 border-moss-300 bg-moss-50/50 hover:bg-moss-100 flex items-center gap-1"
+                        title="Bahas konsep ini dengan Teman Belajar"
+                      >
+                        <Sparkles className="w-3 h-3 text-moss-700" />
+                        Bahas
+                      </button>
+                      <button
+                        onClick={() => onStartLearnConcept(c.id)}
+                        className="btn-primary text-[10px] py-1 px-2 bg-moss-900"
+                      >
+                        Belajar
+                      </button>
+                    </div>
                   </div>
                 ))}
               </div>
@@ -555,6 +575,14 @@ export const ExamSimulationView: React.FC<ExamSimulationViewProps> = ({
             <ArrowRight className="w-4 h-4" />
           </button>
         </div>
+
+        {/* Study Assistant Drawer for Post-Exam Diagnostics */}
+        <StudyAssistantDrawer
+          isOpen={isAssistantOpen}
+          onClose={() => setIsAssistantOpen(false)}
+          concept={assistantConcept}
+          initialAction="compare"
+        />
 
       </div>
     );

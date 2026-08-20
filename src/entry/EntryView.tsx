@@ -170,8 +170,7 @@ export const EntryView: React.FC<EntryViewProps> = ({ onStartAuth }) => {
           {/* Divider + context */}
           <div className="mt-10 pt-8 border-t border-paper-300">
             <p className="text-xs text-ink-500 font-sans leading-relaxed">
-              Paham menyimpan data belajarmu langsung di perangkat ini.
-              Tidak ada akun online yang diperlukan.
+              Akun dan progres belajarmu tersinkronisasi aman dan tetap dapat diakses secara luring.
             </p>
           </div>
 

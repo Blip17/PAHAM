@@ -1,8 +1,7 @@
 // PAHAM Application Root
-// Full state machine: entry → auth → onboarding → transition → arrival → app
-// Local-first: all state stored in IndexedDB + localStorage session.
+// Authoritative Supabase Auth + Canonical Profile State + Full 3-State Routing Engine
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Analytics } from '@vercel/analytics/react';
 import { AppShell } from './components/layout/AppShell';
 import { HomeView } from './views/HomeView';
@@ -21,20 +20,18 @@ import { AuthPanel } from './entry/AuthPanel';
 import { OnboardingShell } from './onboarding/OnboardingShell';
 import { BrandTransition } from './onboarding/BrandTransition';
 import { ArrivalScreen } from './onboarding/ArrivalScreen';
-// Data
-import { db, initializeDatabaseSeed } from './core/db';
+// Services
+import { authService } from './services/authService';
+import { initializeDatabaseSeed } from './core/db';
 import { UserProfile } from './core/types';
 
-// ─────────────────────────────────────────────────────────────────────────────
-// App state machine
-// ─────────────────────────────────────────────────────────────────────────────
-type AppState =
-  | 'loading'      // Checking IndexedDB + localStorage session
+export type AppState =
+  | 'loading'      // Checking Supabase Auth Session
   | 'entry'        // Brand intro + "Mulai / Masuk" buttons
-  | 'auth'         // Auth panel (name entry)
+  | 'auth'         // Auth panel (Name, Email, Password form)
   | 'onboarding'   // 7-step personalized setup
   | 'transition'   // Signature brand animation
-  | 'arrival'      // Personalized "Selamat datang" screen
+  | 'arrival'      // Personalized "Selamat datang, [name]" screen
   | 'app';         // Main PAHAM dashboard
 
 export function App() {
@@ -51,40 +48,56 @@ export function App() {
   const [selectedConceptId, setSelectedConceptId] = useState<string | undefined>(undefined);
   const [selectedExamId, setSelectedExamId] = useState<string | undefined>(undefined);
 
-  // ── Bootstrap: determine where user is in the flow ──────────────────────
+  // ── Bootstrap: authoritative session & profile initialization ────────────
   useEffect(() => {
     async function bootstrap() {
       await initializeDatabaseSeed();
 
-      const session = localStorage.getItem('paham_session');
-      const profile = await db.profiles.toCollection().first();
+      const profile = await authService.getActiveProfile();
 
-      if (!profile || !session) {
-        // No profile → fresh user → show entry
+      if (!profile) {
         setAppState('entry');
         return;
       }
 
-      if (!profile.onboardingCompleted) {
-        // Profile exists but onboarding not done → resume onboarding
-        setUserProfile(profile);
-        setAppState('onboarding');
-        return;
-      }
-
-      if (!profile.hasSeenArrival) {
-        // Onboarding done but haven't seen arrival yet
-        setUserProfile(profile);
-        setAppState('arrival');
-        return;
-      }
-
-      // Fully onboarded → main app
       setUserProfile(profile);
-      setAppState('app');
+
+      if (!profile.onboardingCompleted) {
+        setAppState('onboarding');
+      } else if (!profile.hasSeenArrival) {
+        setAppState('arrival');
+      } else {
+        setAppState('app');
+      }
     }
 
     bootstrap();
+
+    // Listen to Supabase Auth State changes
+    const { data: { subscription } } = authService.onAuthStateChange(async (event, session) => {
+      if (event === 'SIGNED_OUT' || !session) {
+        setUserProfile(null);
+        setAppState('entry');
+      }
+    });
+
+    return () => {
+      subscription.unsubscribe();
+    };
+  }, []);
+
+  // ── Canonical Profile Update Handler (Reactive everywhere) ────────────────
+  const handleUpdateProfile = useCallback(async (updated: UserProfile) => {
+    const saved = await authService.saveProfile(updated);
+    setUserProfile(saved);
+  }, []);
+
+  // ── Sign Out Handler ──────────────────────────────────────────────────────
+  const handleLogout = useCallback(async () => {
+    await authService.signOut();
+    setUserProfile(null);
+    setActiveTab('home');
+    setAppState('entry');
   }, []);
 
   // ── Handlers ─────────────────────────────────────────────────────────────
@@ -106,8 +119,9 @@ export function App() {
   };
 
   const handleOnboardingComplete = async (updatedProfile: UserProfile) => {
-    setUserProfile(updatedProfile);
-    // Trigger the signature brand transition before arrival
+    const saved = await authService.saveProfile(updatedProfile);
+    setUserProfile(saved);
+    // Trigger signature brand transition before arrival
     setAppState('transition');
   };
 
@@ -116,11 +130,10 @@ export function App() {
   };
 
   const handleEnterApp = async () => {
-    // Mark arrival as seen
     if (userProfile) {
-      const updated = { ...userProfile, hasSeenArrival: true, updatedAt: new Date().toISOString() };
-      await db.profiles.put(updated);
-      setUserProfile(updated);
+      const updated = { ...userProfile, hasSeenArrival: true };
+      const saved = await authService.saveProfile(updated);
+      setUserProfile(saved);
     }
     setAppState('app');
   };
@@ -174,7 +187,7 @@ export function App() {
     return (
       <>
         <AuthPanel
-          mode={authMode}
+          initialMode={authMode}
           onBack={() => setAppState('entry')}
           onAuthenticated={handleAuthenticated}
         />
@@ -218,6 +231,7 @@ export function App() {
     return (
       <>
         <AppShell
+          userProfile={userProfile}
           currentTab={activeTab}
           onSelectTab={(tab: string) => {
             setActiveTab(tab);
@@ -227,11 +241,13 @@ export function App() {
           onOpenScan={() => setIsScanModalOpen(true)}
           onStartStudy={handleStartStudy}
           onOpenTimer={handleOpenTimer}
+          onLogout={handleLogout}
           activeTimerConcept={activeTimerConceptTitle}
           activeTimerSeconds={activeTimerMinutes * 60}
         >
           {activeTab === 'home' && (
             <HomeView
+              userProfile={userProfile}
               onStartStudy={handleStartStudy}
               onOpenScan={() => setIsScanModalOpen(true)}
               onOpenQuiz={handleOpenQuiz}
@@ -269,7 +285,13 @@ export function App() {
           {activeTab === 'progress' && (
             <ProgressView onStartLearnConcept={handleStartStudy} />
           )}
-          {activeTab === 'settings' && <SettingsView />}
+          {activeTab === 'settings' && (
+            <SettingsView
+              userProfile={userProfile}
+              onUpdateProfile={handleUpdateProfile}
+              onLogout={handleLogout}
+            />
+          )}
         </AppShell>
 
         <ScanFlowModal
@@ -288,7 +310,6 @@ export function App() {
     );
   }
 
-  // Fallback (should not reach)
   return (
     <div className="min-h-screen bg-paper-100 flex items-center justify-center">
       <span className="font-serif text-ink-500 text-sm">Memuat…</span>

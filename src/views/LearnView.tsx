@@ -12,9 +12,10 @@ import {
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { db } from '../core/db';
-import { Concept, Subject, Chapter, StudentConceptState, FSRSRating } from '../core/types';
+import { Concept, Subject, Chapter, StudentConceptState, FSRSRating, StudyAssistantAction } from '../core/types';
 import { ai, AnswerAnalysisResult } from '../services/ai/aiProvider';
 import { fsrs } from '../core/fsrsEngine';
+import { StudyAssistantDrawer } from '../components/study/StudyAssistantDrawer';
 
 interface LearnViewProps {
   initialConceptId?: string;
@@ -41,6 +42,10 @@ export const LearnView: React.FC<LearnViewProps> = ({
   // Quick Application Check Question
   const [selectedOptionId, setSelectedOptionId] = useState<string | null>(null);
   const [isAnswerRevealed, setIsAnswerRevealed] = useState<boolean>(false);
+
+  // Study Assistant Drawer ("Teman Belajar") State
+  const [isAssistantOpen, setIsAssistantOpen] = useState<boolean>(false);
+  const [assistantAction, setAssistantAction] = useState<StudyAssistantAction>('explain_simple');
 
   useEffect(() => {
     async function loadData() {
@@ -207,6 +212,36 @@ export const LearnView: React.FC<LearnViewProps> = ({
                 ))}
               </ul>
             </div>
+
+            {/* Contextual Study Assistant Bar */}
+            <div className="p-3 bg-paper-100 rounded border border-paper-200 flex flex-wrap items-center justify-between gap-2 text-xs">
+              <span className="text-ink-600 font-serif flex items-center gap-1.5">
+                <Sparkles className="w-3.5 h-3.5 text-moss-800" />
+                Belum terlalu paham bagian ini?
+              </span>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setAssistantAction('explain_simple');
+                    setIsAssistantOpen(true);
+                  }}
+                  className="btn-secondary text-[11px] py-1 px-2.5"
+                >
+                  Jelaskan Lebih Sederhana
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setAssistantAction('give_hint');
+                    setIsAssistantOpen(true);
+                  }}
+                  className="btn-secondary text-[11px] py-1 px-2.5"
+                >
+                  Kasih Petunjuk
+                </button>
+              </div>
+            </div>
           </div>
 
           <div className="pt-4 border-t border-paper-200 flex justify-end">
@@ -240,6 +275,24 @@ export const LearnView: React.FC<LearnViewProps> = ({
             <p className="text-xs sm:text-sm text-ink-700 leading-relaxed font-sans">
               Dalam ulangan atau ujian, pertanyaan sering kali tidak menanyakan definisi secara mentah, melainkan menguji kemampuanmu mengidentifikasi contoh seperti di atas.
             </p>
+
+            {/* Contextual Study Assistant Trigger */}
+            <div className="p-3 bg-paper-100 rounded border border-paper-200 flex flex-wrap items-center justify-between gap-2 text-xs">
+              <span className="text-ink-600 font-serif flex items-center gap-1.5">
+                <Sparkles className="w-3.5 h-3.5 text-moss-800" />
+                Mau contoh kasus lain?
+              </span>
+              <button
+                type="button"
+                onClick={() => {
+                  setAssistantAction('give_example');
+                  setIsAssistantOpen(true);
+                }}
+                className="btn-secondary text-[11px] py-1 px-2.5"
+              >
+                Beri Contoh Lain
+              </button>
+            </div>
           </div>
 
           <div className="pt-4 border-t border-paper-200 flex items-center justify-between">
@@ -438,6 +491,14 @@ export const LearnView: React.FC<LearnViewProps> = ({
           </div>
         </div>
       )}
+
+      {/* Grounded Study Assistant Panel */}
+      <StudyAssistantDrawer
+        isOpen={isAssistantOpen}
+        onClose={() => setIsAssistantOpen(false)}
+        concept={selectedConcept}
+        initialAction={assistantAction}
+      />
 
     </div>
   );

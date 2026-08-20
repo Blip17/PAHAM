@@ -195,3 +195,150 @@ describe('Study Planner Engine', () => {
     expect(plan.urgentExam?.daysRemaining).toBe(3);
   });
 });
+
+import { authService } from '../services/authService';
+import { safeStorage } from '../services/supabaseClient';
+import { generateDeterministicSocraticResponse } from '../services/ai/studyAssistant';
+
+describe('Supabase Authentication & Profile Flow', () => {
+  it('rejects registration when fields are missing or invalid', async () => {
+    // Missing name
+    const res1 = await authService.signUp('', 'test@paham.id', 'password123');
+    expect(res1.success).toBe(false);
+    expect(res1.error).toContain('Nama panggilan');
+
+    // Invalid email
+    const res2 = await authService.signUp('Josh', 'invalid-email', 'password123');
+    expect(res2.success).toBe(false);
+    expect(res2.error).toContain('email');
+
+    // Weak password
+    const res3 = await authService.signUp('Josh', 'josh@paham.id', '12345');
+    expect(res3.success).toBe(false);
+    expect(res3.error).toContain('minimal 6 karakter');
+
+    // Password mismatch
+    const res4 = await authService.signUp('Josh', 'josh@paham.id', 'password123', 'differentpass');
+    expect(res4.success).toBe(false);
+    expect(res4.error).toContain('tidak cocok');
+  });
+
+  it('registers a new valid user and initialises canonical profile', async () => {
+    const testEmail = `student_${Date.now()}@paham.id`;
+    const res = await authService.signUp('Satria', testEmail, 'rahasia123', 'rahasia123');
+
+    expect(res.success).toBe(true);
+    expect(res.profile).toBeDefined();
+    expect(res.profile?.name).toBe('Satria');
+    expect(res.profile?.email).toBe(testEmail);
+    expect(res.profile?.onboardingCompleted).toBe(false);
+  });
+
+  it('prevents duplicate email registration with friendly error message', async () => {
+    const testEmail = `dup_${Date.now()}@paham.id`;
+    await authService.signUp('User Satu', testEmail, 'pass123456');
+
+    // Attempt registering again with same email
+    const dupRes = await authService.signUp('User Dua', testEmail, 'pass123456');
+    expect(dupRes.success).toBe(false);
+    expect(dupRes.error).toContain('sudah ada');
+  });
+
+  it('signs in with valid credentials and rejects wrong password', async () => {
+    const testEmail = `login_${Date.now()}@paham.id`;
+    await authService.signUp('Bunga', testEmail, 'kuncirahasia');
+
+    // Wrong password
+    const failRes = await authService.signIn(testEmail, 'wrongpass');
+    expect(failRes.success).toBe(false);
+    expect(failRes.error).toContain('belum benar');
+
+    // Correct password
+    const passRes = await authService.signIn(testEmail, 'kuncirahasia');
+    expect(passRes.success).toBe(true);
+    expect(passRes.profile?.name).toBe('Bunga');
+  });
+
+  it('clears active session upon signOut', async () => {
+    await authService.signOut();
+    expect(safeStorage.getItem('paham_session_user')).toBeNull();
+  });
+});
+
+describe('Study Assistant Socratic Pedagogy Engine', () => {
+  const sampleConcept: Concept = {
+    id: 'c-test-pedagogy',
+    subjectId: 'sub-bind',
+    chapterId: 'chap-bind-1',
+    title: 'Gaya Bahasa (Majas)',
+    definition: 'Pemanfaatan kekayaan bahasa untuk memperoleh efek tertentu dalam karya sastra.',
+    example: 'Angin malam berbisik lembut di telingaku (Personifikasi).',
+    keyPoints: ['Personifikasi', 'Metafora', 'Hiperbola'],
+    relationships: [],
+    sources: [
+      {
+        materialId: 'mat-test-1',
+        materialTitle: 'Catatan Bab 1 Majas',
+        sourceType: 'catatan_guru',
+        snippet: 'Catatan Bab 1 Majas',
+        pageNumber: 4,
+      },
+    ],
+    difficultyLevel: 2,
+    createdAt: new Date().toISOString(),
+  };
+
+  it('generates a simplified explanation following EXPLAIN stage', () => {
+    const response = generateDeterministicSocraticResponse({
+      concept: sampleConcept,
+      action: 'explain_simple',
+    });
+
+    expect(response.pedagogicalStage).toBe('EXPLAIN');
+    expect(response.message).toContain('Gaya Bahasa (Majas)');
+    expect(response.followupQuestion).toBeDefined();
+  });
+
+  it('generates concrete examples following ASK stage', () => {
+    const response = generateDeterministicSocraticResponse({
+      concept: sampleConcept,
+      action: 'give_example',
+    });
+
+    expect(response.pedagogicalStage).toBe('ASK');
+    expect(response.message).toContain('Personifikasi');
+    expect(response.followupQuestion).toContain('contoh di atas');
+  });
+
+  it('generates retrieval hints following RETRIEVE stage', () => {
+    const response = generateDeterministicSocraticResponse({
+      concept: sampleConcept,
+      action: 'give_hint',
+    });
+
+    expect(response.pedagogicalStage).toBe('RETRIEVE');
+    expect(response.message).toContain('Petunjuk Kunci');
+    expect(response.message).toContain('Catatan Bab 1');
+  });
+
+  it('generates active recall challenges following RETRIEVE stage', () => {
+    const response = generateDeterministicSocraticResponse({
+      concept: sampleConcept,
+      action: 'test_me',
+    });
+
+    expect(response.pedagogicalStage).toBe('RETRIEVE');
+    expect(response.message).toContain('Active Recall');
+  });
+
+  it('compares concepts following CORRECT stage', () => {
+    const response = generateDeterministicSocraticResponse({
+      concept: sampleConcept,
+      action: 'compare',
+    });
+
+    expect(response.pedagogicalStage).toBe('CORRECT');
+    expect(response.message).toContain('Perbandingan');
+  });
+});
+

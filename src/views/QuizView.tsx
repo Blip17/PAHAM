@@ -18,8 +18,9 @@ import {
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { db } from '../core/db';
-import { Question, Concept, MistakeRecord, QuestionOption, StudentConceptState } from '../core/types';
+import { Question, Concept, MistakeRecord, QuestionOption, StudentConceptState, StudyAssistantAction } from '../core/types';
 import { ai } from '../services/ai/aiProvider';
+import { StudyAssistantDrawer } from '../components/study/StudyAssistantDrawer';
 
 interface QuizViewProps {
   initialConceptId?: string;
@@ -47,6 +48,13 @@ export const QuizView: React.FC<QuizViewProps> = ({
   const [userScore, setUserScore] = useState<number>(0);
   const [quizFinished, setQuizFinished] = useState<boolean>(false);
   const [mistakesMade, setMistakesMade] = useState<Array<{ question: Question; conceptTitle: string; userOptionText: string }>>([]);
+
+  // Study Assistant Drawer State
+  const [isAssistantOpen, setIsAssistantOpen] = useState<boolean>(false);
+  const [assistantConcept, setAssistantConcept] = useState<Concept | null>(null);
+  const [assistantQuestion, setAssistantQuestion] = useState<Question | undefined>(undefined);
+  const [assistantAnswerGiven, setAssistantAnswerGiven] = useState<string | undefined>(undefined);
+  const [assistantMistake, setAssistantMistake] = useState<MistakeRecord | undefined>(undefined);
 
   // Dynamic question generation state
   const [isGenerating, setIsGenerating] = useState<boolean>(false);
@@ -408,18 +416,61 @@ export const QuizView: React.FC<QuizViewProps> = ({
 
           {/* Answer Rationale & Misconception Alert */}
           {isAnswered && (
-            <div className="p-4 bg-paper-100 rounded border border-paper-300 space-y-2 text-xs text-ink-700 font-serif">
-              <div className="font-semibold text-ink-900 flex items-center gap-1.5">
-                <BookOpen className="w-3.5 h-3.5 text-moss-800" />
-                Penjelasan Materi:
-              </div>
-              <p className="leading-relaxed whitespace-pre-line">{currentQ.explanation}</p>
-              {currentQ.misconceptionAlert && (
-                <div className="pt-2 border-t border-paper-200 text-terracotta-900 text-[11px] font-sans font-medium flex items-start gap-1.5">
-                  <AlertTriangle className="w-3.5 h-3.5 text-terracotta-700 shrink-0 mt-0.5" />
-                  <span>{currentQ.misconceptionAlert}</span>
-                </div>
-              )}
+            <div className="space-y-3">
+              {/* Correctness Banner */}
+              {(() => {
+                const chosen = currentQ.options?.find((o: QuestionOption) => o.id === selectedOptionId);
+                const isCorrect = Boolean(chosen?.isCorrect);
+                const conc = conceptMap.get(currentQ.conceptId);
+
+                return (
+                  <div className={`p-4 rounded border text-xs space-y-2 ${
+                    isCorrect ? 'bg-moss-50 border-moss-200 text-moss-950' : 'bg-terracotta-50 border-terracotta-200 text-terracotta-950'
+                  }`}>
+                    <div className="flex items-center justify-between font-semibold">
+                      <span className="flex items-center gap-1.5">
+                        {isCorrect ? <Check className="w-4 h-4 text-moss-700" /> : <AlertTriangle className="w-4 h-4 text-terracotta-700" />}
+                        {isCorrect ? 'Jawaban Tepat!' : 'Belum Tepat'}
+                      </span>
+                      {!isCorrect && conc && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setAssistantConcept(conc);
+                            setAssistantQuestion(currentQ);
+                            setAssistantAnswerGiven(chosen?.text || '');
+                            setAssistantMistake({
+                              id: `mst-${Date.now()}`,
+                              conceptId: currentQ.conceptId,
+                              conceptTitle: conc.title,
+                              subjectId: currentQ.subjectId,
+                              questionPrompt: currentQ.prompt,
+                              userGivenAnswer: chosen?.text || '',
+                              correctAnswer: currentQ.options?.find(o => o.isCorrect)?.text || '',
+                              misconceptionDescription: currentQ.misconceptionAlert || 'Kekeliruan identifikasi konsep materi.',
+                              dateOccurred: new Date().toISOString(),
+                              isResolved: false,
+                            });
+                            setIsAssistantOpen(true);
+                          }}
+                          className="btn-secondary text-[11px] py-1 px-2.5 bg-paper-50 text-terracotta-900 border-terracotta-300 hover:bg-terracotta-100 flex items-center gap-1"
+                        >
+                          <Sparkles className="w-3 h-3 text-terracotta-700" />
+                          Bantu Aku Ngerti
+                        </button>
+                      )}
+                    </div>
+
+                    <p className="font-serif leading-relaxed text-ink-800">{currentQ.explanation}</p>
+
+                    {currentQ.misconceptionAlert && (
+                      <div className="pt-2 border-t border-paper-200 text-[11px] font-sans font-medium text-terracotta-900">
+                        ⚠️ Catatan Pembeda: {currentQ.misconceptionAlert}
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
             </div>
           )}
 
@@ -451,6 +502,17 @@ export const QuizView: React.FC<QuizViewProps> = ({
           <p>Tidak ada soal pada kategori ini.</p>
         </div>
       )}
+
+      {/* Grounded Study Assistant Modal for Error Diagnosis */}
+      <StudyAssistantDrawer
+        isOpen={isAssistantOpen}
+        onClose={() => setIsAssistantOpen(false)}
+        concept={assistantConcept}
+        initialAction="give_hint"
+        questionContext={assistantQuestion}
+        studentAnswerGiven={assistantAnswerGiven}
+        recentMistake={assistantMistake}
+      />
 
     </div>
   );

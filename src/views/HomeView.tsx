@@ -33,6 +33,7 @@ import { masteryEngine } from '../core/masteryEngine';
 import { StudyAdvisorModal } from './StudyAdvisorModal';
 
 interface HomeViewProps {
+  userProfile: UserProfile;
   onStartStudy: (conceptId: string) => void;
   onOpenScan: () => void;
   onOpenQuiz: (conceptId?: string) => void;
@@ -41,13 +42,13 @@ interface HomeViewProps {
 }
 
 export const HomeView: React.FC<HomeViewProps> = ({
+  userProfile,
   onStartStudy,
   onOpenScan,
   onOpenQuiz,
   onOpenExam,
   onOpenMaterials,
 }) => {
-  const [profile, setProfile] = useState<UserProfile | null>(null);
   const [dailyPlan, setDailyPlan] = useState<DailyStudyPlan | null>(null);
   const [heroItem, setHeroItem] = useState<DailyStudyItem | null>(null);
   const [upcomingExam, setUpcomingExam] = useState<Exam | null>(null);
@@ -67,9 +68,6 @@ export const HomeView: React.FC<HomeViewProps> = ({
   useEffect(() => {
     async function loadData() {
       setIsLoading(true);
-      const p = await db.profiles.toCollection().first();
-      if (p) setProfile(p);
-
       const matsCount = await db.materials.count();
       setTotalMaterialsCount(matsCount);
 
@@ -125,7 +123,8 @@ export const HomeView: React.FC<HomeViewProps> = ({
     );
   }
 
-  const firstName = profile?.name ? profile.name.split(' ')[0] : 'Siswa';
+  const displayName = userProfile.displayName || userProfile.name || 'Siswa';
+  const firstName = displayName.split(' ')[0];
 
   return (
     <div className="space-y-8">
@@ -139,7 +138,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
             Selamat {new Date().getHours() < 12 ? 'pagi' : new Date().getHours() < 15 ? 'siang' : new Date().getHours() < 18 ? 'sore' : 'malam'}, {firstName}.
           </h1>
           <p className="text-ink-600 text-base mt-1 font-serif">
-            {profile?.schoolName ? `${profile.schoolName} · ${profile.grade} (${profile.semester})` : 'Apa yang mau kamu pahami hari ini?'}
+            {userProfile.schoolName ? `${userProfile.schoolName} · ${userProfile.grade} (${userProfile.semester})` : 'Apa yang mau kamu pahami hari ini?'}
           </p>
         </div>
 

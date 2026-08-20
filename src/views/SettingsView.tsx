@@ -1,5 +1,5 @@
 // Settings View for PAHAM
-// School profile, 16+ Subject & Chapter Manager, Gemini API Manager, and Local Database Backup
+// School profile, Subject & Chapter Manager, Gemini API Manager, Local Database Backup, and Account Management
 
 import React, { useState, useEffect } from 'react';
 import { 
@@ -9,17 +9,27 @@ import {
   AlertCircle, 
   Download,
   Plus,
-  BookOpen,
   Trash2,
-  Edit2
+  LogOut,
+  User
 } from 'lucide-react';
-import { db, initializeDatabaseSeed, DEFAULT_INDONESIAN_SUBJECTS } from '../core/db';
+import { db, initializeDatabaseSeed } from '../core/db';
 import { UserProfile, GradeLevel, Semester, Subject, Chapter } from '../core/types';
 import { budgetGuard } from '../services/ai/budgetGuard';
 import { GoogleGenAI } from '@google/genai';
 
-export const SettingsView: React.FC = () => {
-  const [profile, setProfile] = useState<UserProfile | null>(null);
+interface SettingsViewProps {
+  userProfile: UserProfile;
+  onUpdateProfile: (profile: UserProfile) => Promise<void>;
+  onLogout: () => void;
+}
+
+export const SettingsView: React.FC<SettingsViewProps> = ({
+  userProfile,
+  onUpdateProfile,
+  onLogout,
+}) => {
+  const [profile, setProfile] = useState<UserProfile>(userProfile);
   const [apiKeyInput, setApiKeyInput] = useState<string>('');
   const [isApiKeySaved, setIsApiKeySaved] = useState<boolean>(false);
   const [isTestingKey, setIsTestingKey] = useState<boolean>(false);
@@ -27,6 +37,7 @@ export const SettingsView: React.FC = () => {
   
   const [budgetUsage, setBudgetUsage] = useState<any>(null);
   const [isSavedToast, setIsSavedToast] = useState<boolean>(false);
+  const [isSaving, setIsSaving] = useState<boolean>(false);
 
   // Subject & Chapter Management
   const [subjects, setSubjects] = useState<Subject[]>([]);
@@ -37,10 +48,11 @@ export const SettingsView: React.FC = () => {
   const [newSubDesc, setNewSubDesc] = useState<string>('');
 
   useEffect(() => {
-    async function loadSettings() {
-      const p = await db.profiles.toCollection().first();
-      if (p) setProfile(p);
+    setProfile(userProfile);
+  }, [userProfile]);
 
+  useEffect(() => {
+    async function loadSettings() {
       const existingKey = budgetGuard.getApiKey();
       if (existingKey) {
         setApiKeyInput(existingKey);
@@ -59,13 +71,18 @@ export const SettingsView: React.FC = () => {
 
   const handleSaveProfile = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!profile) return;
+    setIsSaving(true);
 
-    await db.profiles.put({
+    const updated: UserProfile = {
       ...profile,
+      name: profile.name.trim() || 'Siswa',
+      displayName: (profile.displayName || profile.name).trim() || 'Siswa',
+      schoolName: profile.schoolName.trim(),
       updatedAt: new Date().toISOString(),
-    });
+    };
 
+    await onUpdateProfile(updated);
+    setIsSaving(false);
     setIsSavedToast(true);
     setTimeout(() => setIsSavedToast(false), 2500);
   };
@@ -167,8 +184,6 @@ export const SettingsView: React.FC = () => {
     a.click();
   };
 
-  if (!profile) return null;
-
   return (
     <div className="max-w-2xl mx-auto space-y-8">
       
@@ -177,19 +192,50 @@ export const SettingsView: React.FC = () => {
           Pengaturan
         </h1>
         <p className="text-sm text-ink-600 font-serif mt-0.5">
-          Profil sekolah, daftar mata pelajaran ({subjects.length} mapel), dan konfigurasi AI.
+          Profil siswa, kurikulum ({subjects.length} mapel), konfigurasi AI, dan akun.
         </p>
       </header>
 
-      {/* 1. Profil Sekolah & Siswa */}
+      {/* 1. Akun & Sesi Pengguna */}
+      <div className="paper-sheet p-6 space-y-4">
+        <div className="flex items-center justify-between pb-3 border-b border-paper-200">
+          <div>
+            <span className="text-[10px] font-mono uppercase tracking-wider text-moss-800 font-semibold block">
+              Autentikasi & Sesi
+            </span>
+            <h3 className="font-serif text-lg font-medium text-ink-950">
+              Akun PAHAM
+            </h3>
+          </div>
+          <button
+            onClick={onLogout}
+            className="btn-secondary text-xs py-1.5 px-3 text-terracotta-800 border-terracotta-200 hover:bg-terracotta-50 flex items-center gap-1.5"
+          >
+            <LogOut className="w-3.5 h-3.5" />
+            Keluar Akun
+          </button>
+        </div>
+
+        <div className="flex items-center gap-3 p-3 bg-paper-100 rounded border border-paper-200 text-xs">
+          <div className="w-10 h-10 rounded-full bg-moss-900 text-paper-50 flex items-center justify-center font-serif text-base font-semibold">
+            {(profile.displayName || profile.name || 'S').charAt(0).toUpperCase()}
+          </div>
+          <div>
+            <p className="font-semibold text-ink-900 text-sm">{profile.displayName || profile.name}</p>
+            <p className="text-ink-500 font-mono text-[11px]">{profile.email || 'Akun Belajar Terdaftar'}</p>
+          </div>
+        </div>
+      </div>
+
+      {/* 2. Profil Sekolah & Siswa */}
       <form onSubmit={handleSaveProfile} className="paper-sheet p-6 space-y-5">
         <div className="flex items-center justify-between pb-3 border-b border-paper-200">
           <div>
             <span className="text-[10px] font-mono uppercase tracking-wider text-moss-800 font-semibold block">
-              Identitas Siswa
+              Identitas Belajar
             </span>
             <h3 className="font-serif text-lg font-medium text-ink-950">
-              Profil Sekolah
+              Profil Sekolah & Personalisasi
             </h3>
           </div>
           {isSavedToast && (
@@ -201,11 +247,12 @@ export const SettingsView: React.FC = () => {
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div>
-            <label className="text-xs font-medium text-ink-700 block mb-1">Nama Lengkap</label>
+            <label className="text-xs font-medium text-ink-700 block mb-1">Nama Panggilan</label>
             <input
               type="text"
-              value={profile.name}
-              onChange={(e) => setProfile({ ...profile, name: e.target.value })}
+              required
+              value={profile.displayName || profile.name}
+              onChange={(e) => setProfile({ ...profile, displayName: e.target.value, name: e.target.value })}
               className="w-full bg-paper-100 border border-paper-300 rounded px-3 py-1.5 text-xs text-ink-900 focus:bg-paper-50 focus:border-moss-700"
             />
           </div>
@@ -230,9 +277,9 @@ export const SettingsView: React.FC = () => {
               <option value="Kelas 7">Kelas 7 (SMP)</option>
               <option value="Kelas 8">Kelas 8 (SMP)</option>
               <option value="Kelas 9">Kelas 9 (SMP)</option>
-              <option value="Kelas 10">Kelas 10 (SMA)</option>
-              <option value="Kelas 11">Kelas 11 (SMA)</option>
-              <option value="Kelas 12">Kelas 12 (SMA)</option>
+              <option value="Kelas 10">Kelas 10 (SMA/SMK)</option>
+              <option value="Kelas 11">Kelas 11 (SMA/SMK)</option>
+              <option value="Kelas 12">Kelas 12 (SMA/SMK)</option>
             </select>
           </div>
 
@@ -264,19 +311,23 @@ export const SettingsView: React.FC = () => {
         </div>
 
         <div className="pt-2 flex justify-end">
-          <button type="submit" className="btn-primary text-xs py-2 px-4 shadow-subtle">
+          <button 
+            type="submit" 
+            disabled={isSaving}
+            className="btn-primary text-xs py-2 px-4 shadow-subtle flex items-center gap-1.5 disabled:opacity-50"
+          >
             <Save className="w-3.5 h-3.5" />
-            Simpan Profil
+            {isSaving ? 'Menyimpan...' : 'Simpan Profil'}
           </button>
         </div>
       </form>
 
-      {/* 2. Manajemen Mata Pelajaran (10+ Subjects) */}
+      {/* 3. Manajemen Mata Pelajaran */}
       <div className="paper-sheet p-6 space-y-4">
         <div className="flex items-center justify-between pb-3 border-b border-paper-200">
           <div>
             <span className="text-[10px] font-mono uppercase tracking-wider text-moss-800 font-semibold block">
-              Kurikulum Sekolah
+              Kurikulum Terdaftar
             </span>
             <h3 className="font-serif text-lg font-medium text-ink-950">
               Daftar Mata Pelajaran ({subjects.length})
@@ -365,7 +416,7 @@ export const SettingsView: React.FC = () => {
         </div>
       </div>
 
-      {/* 3. Integrasi Google Gemini API & Budget Guard */}
+      {/* 4. Integrasi Google Gemini API & Budget Guard */}
       <div className="paper-sheet p-6 space-y-5">
         <div className="flex items-center justify-between pb-3 border-b border-paper-200">
           <div>
@@ -448,15 +499,15 @@ export const SettingsView: React.FC = () => {
         </div>
       </div>
 
-      {/* 4. Manajemen Database & Backup */}
+      {/* 5. Manajemen Database & Backup */}
       <div className="paper-sheet p-6 space-y-4">
         <div className="flex items-center justify-between pb-3 border-b border-paper-200">
           <div>
             <span className="text-[10px] font-mono uppercase tracking-wider text-ink-500 font-semibold block">
-              Penyimpanan Lokal
+              Penyimpanan Data
             </span>
             <h3 className="font-serif text-lg font-medium text-ink-950">
-              Basis Data IndexedDB
+              Cadangan & Reset
             </h3>
           </div>
         </div>

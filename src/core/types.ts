@@ -16,6 +16,7 @@ export type StudyTimeSlot = '10-15' | '20-30' | '30-60' | '60+' | 'tidak_tentu';
 export interface UserProfile {
   id: string;
   name: string;                           // display name (panggilan)
+  email?: string;
   grade: GradeLevel;
   semester: Semester;
   schoolName: string;
@@ -306,3 +307,28 @@ export interface AIBudgetState {
   isBudgetExceeded: boolean;
   customApiKey?: string;
 }
+
+export type StudyAssistantAction = 
+  | 'explain_simple'
+  | 'give_example'
+  | 'give_hint'
+  | 'test_me'
+  | 'compare';
+
+export interface StudyAssistantMessage {
+  id: string;
+  sender: 'user' | 'assistant';
+  text: string;
+  actionUsed?: StudyAssistantAction;
+  timestamp: string;
+  suggestedFollowups?: string[];
+}
+
+export interface StudyAssistantResponse {
+  message: string;
+  pedagogicalStage: 'EXPLAIN' | 'ASK' | 'RETRIEVE' | 'CORRECT' | 'PRACTICE';
+  followupQuestion?: string;
+  suggestedFollowups: string[];
+  isAiGenerated: boolean;
+}
+

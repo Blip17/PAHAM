@@ -18,9 +18,11 @@ import {
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { db } from '../core/db';
-import { Question, Concept, MistakeRecord, QuestionOption, StudentConceptState, StudyAssistantAction } from '../core/types';
+import { Question, Concept, MistakeRecord, QuestionOption, StudentConceptState, StudyAssistantAction, SkillType } from '../core/types';
 import { ai } from '../services/ai/aiProvider';
 import { StudyAssistantDrawer } from '../components/study/StudyAssistantDrawer';
+import { adaptiveQuestionEngine, AdaptiveSessionState } from '../learning/engine/adaptiveQuestionEngine';
+import { flashcardService } from '../learning/flashcards/flashcardService';
 
 interface QuizViewProps {
   initialConceptId?: string;
@@ -28,7 +30,7 @@ interface QuizViewProps {
   onStartLearnConcept: (conceptId: string) => void;
 }
 
-type QuizMode = 'quick' | 'topic' | 'weakness' | 'review' | 'generate';
+type QuizMode = 'adaptive' | 'quick' | 'topic' | 'weakness' | 'review' | 'generate';
 
 export const QuizView: React.FC<QuizViewProps> = ({
   initialConceptId,
@@ -40,7 +42,7 @@ export const QuizView: React.FC<QuizViewProps> = ({
   const [concepts, setConcepts] = useState<Concept[]>([]);
   const [studentStates, setStudentStates] = useState<StudentConceptState[]>([]);
   
-  const [quizMode, setQuizMode] = useState<QuizMode>('quick');
+  const [quizMode, setQuizMode] = useState<QuizMode>('adaptive');
   const [selectedConceptId, setSelectedConceptId] = useState<string | undefined>(initialConceptId);
   const [currentIndex, setCurrentIndex] = useState<number>(0);
   const [selectedOptionId, setSelectedOptionId] = useState<string | null>(null);
@@ -48,6 +50,10 @@ export const QuizView: React.FC<QuizViewProps> = ({
   const [userScore, setUserScore] = useState<number>(0);
   const [quizFinished, setQuizFinished] = useState<boolean>(false);
   const [mistakesMade, setMistakesMade] = useState<Array<{ question: Question; conceptTitle: string; userOptionText: string }>>([]);
+
+  // Adaptive Engine State
+  const [adaptiveState, setAdaptiveState] = useState<AdaptiveSessionState | null>(null);
+  const [adaptiveMicrocopy, setAdaptiveMicrocopy] = useState<string>('Soal pertama menguji pemahaman dasar.');
 
   // Study Assistant Drawer State
   const [isAssistantOpen, setIsAssistantOpen] = useState<boolean>(false);
@@ -262,6 +268,15 @@ export const QuizView: React.FC<QuizViewProps> = ({
         {/* Mode Filter Tabs */}
         <div className="flex items-center gap-1.5 overflow-x-auto pb-1 text-xs">
           <button
+            onClick={() => handleModeChange('adaptive')}
+            className={`px-3 py-1.5 rounded font-medium flex items-center gap-1.5 transition ${
+              quizMode === 'adaptive' ? 'bg-moss-900 text-paper-50 font-bold' : 'bg-paper-200 text-ink-700 hover:bg-paper-300'
+            }`}
+          >
+            <Sparkles className="w-3.5 h-3.5 text-moss-200" />
+            Latihan Adaptif (Multi-Level)
+          </button>
+          <button
             onClick={() => handleModeChange('quick')}
             className={`px-3 py-1.5 rounded font-medium transition ${
               quizMode === 'quick' ? 'bg-ink-900 text-paper-50' : 'bg-paper-200 text-ink-700 hover:bg-paper-300'
@@ -288,6 +303,14 @@ export const QuizView: React.FC<QuizViewProps> = ({
             FSRS Due Review
           </button>
         </div>
+
+        {/* Adaptive Microcopy Feedback Banner */}
+        {quizMode === 'adaptive' && adaptiveMicrocopy && !quizFinished && (
+          <div className="p-2.5 bg-paper-100 rounded border border-moss-200 text-[11px] font-mono text-moss-900 flex items-center gap-2">
+            <span className="w-2 h-2 rounded-full bg-moss-600 animate-pulse shrink-0" />
+            <span>{adaptiveMicrocopy}</span>
+          </div>
+        )}
       </div>
 
       {/* QUIZ FINISHED REPORT */}

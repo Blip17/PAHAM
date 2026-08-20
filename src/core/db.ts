@@ -14,7 +14,9 @@ import {
   ExamAttempt,
   MistakeRecord,
   LearningEvent,
-  DailyStudyPlan
+  DailyStudyPlan,
+  Flashcard,
+  StudySession
 } from './types';
 
 export class PahamDatabase extends Dexie {
@@ -30,6 +32,8 @@ export class PahamDatabase extends Dexie {
   mistakeRecords!: Table<MistakeRecord, string>;
   learningEvents!: Table<LearningEvent, string>;
   studyPlans!: Table<DailyStudyPlan, string>;
+  flashcards!: Table<Flashcard, string>;
+  studySessions!: Table<StudySession, string>;
 
   constructor() {
     super('PahamDB');
@@ -46,6 +50,8 @@ export class PahamDatabase extends Dexie {
       mistakeRecords: 'id, conceptId, subjectId, isResolved, dateOccurred',
       learningEvents: 'id, timestamp, eventType, subjectId, conceptId',
       studyPlans: 'date',
+      flashcards: 'id, conceptId, subjectId, chapterId, cardType',
+      studySessions: 'id, subjectId, mode, startedAt',
     });
   }
 }

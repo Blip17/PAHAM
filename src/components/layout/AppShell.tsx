@@ -68,9 +68,10 @@ export const AppShell: React.FC<AppShellProps> = ({
   const desktopNavItems = [
     { id: 'home', label: 'Beranda', icon: Home },
     { id: 'learn', label: 'Belajar', icon: BookOpen },
-    { id: 'materials', label: 'Materi', icon: Layers },
+    { id: 'flashcards', label: 'Flashcards', icon: Layers },
+    { id: 'materials', label: 'Materi', icon: FileText },
     { id: 'quiz', label: 'Quiz', icon: HelpCircle },
-    { id: 'exam', label: 'Ujian', icon: FileText },
+    { id: 'exam', label: 'Ujian', icon: GraduationCap },
     { id: 'progress', label: 'Progress', icon: TrendingUp },
     { id: 'settings', label: 'Pengaturan', icon: Settings },
   ];
@@ -78,7 +79,7 @@ export const AppShell: React.FC<AppShellProps> = ({
   const mobileBottomItems = [
     { id: 'home', label: 'Beranda', icon: Home },
     { id: 'learn', label: 'Belajar', icon: BookOpen },
-    { id: 'materials', label: 'Materi', icon: Layers },
+    { id: 'flashcards', label: 'Flashcards', icon: Layers },
     { id: 'quiz', label: 'Quiz', icon: HelpCircle },
   ];
 
@@ -334,13 +335,26 @@ export const AppShell: React.FC<AppShellProps> = ({
               <button
                 onClick={() => {
                   setIsMobileMenuOpen(false);
+                  onSelectTab('materials');
+                }}
+                className={`w-full flex items-center gap-3 p-3 rounded text-left transition ${
+                  currentTab === 'materials' ? 'bg-paper-200 font-semibold text-ink-950' : 'hover:bg-paper-150 text-ink-800'
+                }`}
+              >
+                <BookOpen className="w-4 h-4 text-moss-800" />
+                <span>Katalog Materi & Catatan</span>
+              </button>
+
+              <button
+                onClick={() => {
+                  setIsMobileMenuOpen(false);
                   onSelectTab('exam');
                 }}
                 className={`w-full flex items-center gap-3 p-3 rounded text-left transition ${
                   currentTab === 'exam' ? 'bg-paper-200 font-semibold text-ink-950' : 'hover:bg-paper-150 text-ink-800'
                 }`}
               >
-                <FileText className="w-4 h-4 text-moss-800" />
+                <GraduationCap className="w-4 h-4 text-moss-800" />
                 <span>Simulasi Ujian</span>
               </button>
 

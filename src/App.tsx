@@ -7,6 +7,7 @@ import { AppShell } from './components/layout/AppShell';
 import { HomeView } from './views/HomeView';
 import { MaterialsView } from './views/MaterialsView';
 import { LearnView } from './views/LearnView';
+import { FlashcardsView } from './views/FlashcardsView';
 import { QuizView } from './views/QuizView';
 import { ExamSimulationView } from './views/ExamSimulationView';
 import { ProgressView } from './views/ProgressView';
@@ -256,6 +257,13 @@ export function App() {
               onOpenQuiz={handleOpenQuiz}
               onOpenExam={handleOpenExam}
               onOpenMaterials={() => setActiveTab('materials')}
+              onOpenFlashcards={() => setActiveTab('flashcards')}
+            />
+          )}
+          {activeTab === 'flashcards' && (
+            <FlashcardsView
+              initialConceptId={selectedConceptId}
+              onStartLearnConcept={handleStartStudy}
             />
           )}
           {activeTab === 'materials' && (

@@ -332,3 +332,135 @@ export interface StudyAssistantResponse {
   isAiGenerated: boolean;
 }
 
+// ────────────────────────────────────────────────────────────
+// MAIN LEARNING ENGINE DOMAIN TYPES
+// ────────────────────────────────────────────────────────────
+
+export type CardType = 
+  | 'BASIC'
+  | 'CLOZE'
+  | 'CONCEPT_DEFINITION'
+  | 'TERM_DEFINITION'
+  | 'QUESTION_ANSWER'
+  | 'COMPARE'
+  | 'FORMULA'
+  | 'VOCABULARY'
+  | 'IMAGE_RECALL';
+
+export interface Flashcard {
+  id: string;
+  studentId?: string;
+  conceptId: string;
+  conceptTitle?: string;
+  subjectId: string;
+  chapterId: string;
+  front: string;
+  back: string;
+  hint?: string;
+  sourceReferences?: SourceReference[];
+  cardType: CardType;
+  fsrs: FSRSCard;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export type FlashcardMode = 'DUE' | 'TOPIC' | 'WEAK' | 'NEW' | 'MIXED' | 'EXAM';
+
+export type StudyMode = 
+  | 'LEARN'
+  | 'RECALL'
+  | 'FLASHCARD'
+  | 'ADAPTIVE_PRACTICE'
+  | 'REPAIR'
+  | 'MIXED_PRACTICE'
+  | 'EXAM_PREP'
+  | 'REVIEW'
+  | 'RESCUE';
+
+export type ActivityType = 
+  | 'RECALL'
+  | 'FLASHCARD'
+  | 'EXPLANATION'
+  | 'EXAMPLE'
+  | 'QUIZ'
+  | 'ADAPTIVE_QUESTION'
+  | 'COMPARE'
+  | 'TEACH_BACK'
+  | 'CONFIDENCE_CHECK'
+  | 'SUMMARY'
+  | 'REVIEW';
+
+export type SkillType = 
+  | 'KNOWLEDGE'
+  | 'RECALL'
+  | 'APPLICATION'
+  | 'DISTINCTION'
+  | 'PROBLEM_SOLVING'
+  | 'EXPLANATION';
+
+export interface StudyActivity {
+  id: string;
+  sessionId: string;
+  type: ActivityType;
+  conceptId: string;
+  conceptTitle?: string;
+  order: number;
+  status: 'pending' | 'active' | 'completed' | 'skipped';
+  startedAt?: string;
+  completedAt?: string;
+  data?: any;
+  result?: any;
+}
+
+export interface SessionSummaryData {
+  timeStudiedSeconds: number;
+  conceptsReviewedCount: number;
+  questionsAnsweredCount: number;
+  correctAnswersCount: number;
+  masteryDelta: Record<string, { before: number; after: number }>;
+  weaknessesIdentified: string[];
+  strengthsReinforced: string[];
+  nextReviewDate: string;
+}
+
+export interface StudySession {
+  id: string;
+  studentId?: string;
+  conceptIds: string[];
+  subjectId: string;
+  mode: StudyMode;
+  plannedDurationMinutes: number;
+  startedAt: string;
+  endedAt?: string;
+  status: 'active' | 'completed' | 'abandoned';
+  activities: StudyActivity[];
+  masteryBefore?: number;
+  masteryAfter?: number;
+  confidenceBefore?: 'low' | 'medium' | 'high';
+  confidenceAfter?: 'low' | 'medium' | 'high';
+  summary?: SessionSummaryData;
+}
+
+export interface AdaptiveQuestionAttempt {
+  id: string;
+  sessionId: string;
+  questionId: string;
+  conceptId: string;
+  difficulty: 1 | 2 | 3 | 4 | 5;
+  skill: SkillType;
+  answer: string;
+  correct: boolean;
+  mistakeType?: string;
+  responseTimeSeconds: number;
+  confidence?: 'low' | 'medium' | 'high';
+}
+
+export interface LearningMethodRecommendation {
+  method: StudyMode;
+  methodLabel: string;
+  reason: string;
+  relevanceScore: number; // 0 to 1
+  estimatedMinutes: number;
+  alternativeMethods: Array<{ method: StudyMode; label: string; reason: string }>;
+}
+

@@ -1,14 +1,20 @@
 // Learn Canvas for PAHAM
-// Active learning canvas with step-by-step recall and self-explanation (Not a chat interface)
+// Evidence-based cognitive learning rhythm: Retrieval Practice -> Concept Notes -> Elaboration -> Interleaved Check -> Metacognitive Calibration -> FSRS Spaced Review
 
 import React, { useState, useEffect } from 'react';
 import { 
   ArrowRight, 
   CheckCircle, 
   Sparkles, 
-  Clock,
-  Check,
-  AlertCircle
+  Clock, 
+  Check, 
+  AlertCircle,
+  HelpCircle,
+  RotateCcw,
+  BookOpen,
+  Eye,
+  Zap,
+  ChevronLeft
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { db } from '../core/db';
@@ -33,17 +39,33 @@ export const LearnView: React.FC<LearnViewProps> = ({
   const [selectedConcept, setSelectedConcept] = useState<Concept | null>(null);
   const [studentState, setStudentState] = useState<StudentConceptState | null>(null);
 
-  // Active Learning Step (1: Definisi Dasar, 2: Contoh Nyata, 3: Active Recall / Self-Explanation, 4: Quick Application, 5: FSRS Rating)
+  // 6-Step Cognitive Rhythm:
+  // Step 1: Pre-Check Retrieval (Recall before reading)
+  // Step 2: Source Notes & Foundation (Key points + example)
+  // Step 3: Elaboration (Why it happens / Explain to a peer)
+  // Step 4: Interleaved Practice Question (Identify strategy & apply)
+  // Step 5: Metacognitive Confidence Calibration
+  // Step 6: FSRS Spaced Review Scheduling
   const [currentStep, setCurrentStep] = useState<number>(1);
-  const [selfExplanationInput, setSelfExplanationInput] = useState<string>('');
-  const [isAnalyzingExplanation, setIsAnalyzingExplanation] = useState<boolean>(false);
-  const [analysisResult, setAnalysisResult] = useState<AnswerAnalysisResult | null>(null);
   
-  // Quick Application Check Question
+  // Step 1: Pre-Recall
+  const [preRecallInput, setPreRecallInput] = useState<string>('');
+  const [isPreRecallRevealed, setIsPreRecallRevealed] = useState<boolean>(false);
+
+  // Step 3: Elaboration
+  const [elaborationInput, setElaborationInput] = useState<string>('');
+  const [isAnalyzingElaboration, setIsAnalyzingElaboration] = useState<boolean>(false);
+  const [elaborationFeedback, setElaborationFeedback] = useState<AnswerAnalysisResult | null>(null);
+
+  // Step 4: Interleaved Question
   const [selectedOptionId, setSelectedOptionId] = useState<string | null>(null);
   const [isAnswerRevealed, setIsAnswerRevealed] = useState<boolean>(false);
+  const [selectedStrategy, setSelectedStrategy] = useState<string | null>(null);
 
-  // Study Assistant Drawer ("Teman Belajar") State
+  // Step 5: Metacognitive Confidence Check
+  const [confidenceLevel, setConfidenceLevel] = useState<'low' | 'medium' | 'high' | null>(null);
+
+  // Study Assistant Drawer State
   const [isAssistantOpen, setIsAssistantOpen] = useState<boolean>(false);
   const [assistantAction, setAssistantAction] = useState<StudyAssistantAction>('explain_simple');
 
@@ -74,19 +96,19 @@ export const LearnView: React.FC<LearnViewProps> = ({
   const getSubject = (subId?: string) => subjects.find(s => s.id === subId);
   const getChapter = (chapId?: string) => chapters.find(c => c.id === chapId);
 
-  const handleAnalyzeExplanation = async () => {
-    if (!selectedConcept || !selfExplanationInput.trim()) return;
-    setIsAnalyzingExplanation(true);
+  const handleAnalyzeElaboration = async () => {
+    if (!selectedConcept || !elaborationInput.trim()) return;
+    setIsAnalyzingElaboration(true);
 
     const result = await ai.analyzeAnswer({
-      questionPrompt: `Jelaskan apa itu ${selectedConcept.title} dan bagaimana cara memahaminya?`,
-      expectedAnswer: selectedConcept.definition,
-      studentAnswer: selfExplanationInput,
+      questionPrompt: `Kenapa konsep ${selectedConcept.title} bekerja seperti itu dan bagaimana analoginya?`,
+      expectedAnswer: `${selectedConcept.definition} Contoh: ${selectedConcept.example}`,
+      studentAnswer: elaborationInput,
       concept: selectedConcept,
     });
 
-    setAnalysisResult(result);
-    setIsAnalyzingExplanation(false);
+    setElaborationFeedback(result);
+    setIsAnalyzingElaboration(false);
   };
 
   const handleRateFSRS = async (rating: FSRSRating) => {
@@ -116,12 +138,14 @@ export const LearnView: React.FC<LearnViewProps> = ({
       timestamp: new Date().toISOString(),
       eventType: 'LEARN_STEP_COMPLETED',
       conceptId: selectedConcept.id,
-      metadata: { rating, stability: updatedCard.stability },
+      metadata: { rating, stability: updatedCard.stability, confidence: confidenceLevel },
     });
 
-    try {
-      confetti({ particleCount: 40, spread: 60, origin: { y: 0.8 } });
-    } catch {}
+    confetti({
+      particleCount: 40,
+      spread: 60,
+      origin: { y: 0.7 },
+    });
 
     onFinishSession();
   };
@@ -129,79 +153,137 @@ export const LearnView: React.FC<LearnViewProps> = ({
   if (!selectedConcept) {
     return (
       <div className="py-20 text-center text-ink-500 font-serif">
-        Pilih konsep untuk mulai belajar.
+        Memuat materi belajar...
       </div>
     );
   }
 
-  const subject = getSubject(selectedConcept.subjectId);
-  const chapter = getChapter(selectedConcept.chapterId);
+  const currentSubject = getSubject(selectedConcept.subjectId);
+  const currentChapter = getChapter(selectedConcept.chapterId);
 
   return (
     <div className="max-w-3xl mx-auto space-y-6">
       
-      {/* Top Header & Context */}
-      <div className="flex items-center justify-between border-b border-paper-300 pb-4">
+      {/* ── Distraction-Free Study Header ─────────────────────── */}
+      <header className="paper-sheet p-4 sm:p-5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 border-b-2 border-b-moss-800">
         <div>
-          <span className="text-xs font-mono uppercase tracking-wider text-moss-800 font-semibold block">
-            {subject?.name || 'Pelajaran'} · {chapter?.title.split('—')[0]}
+          <span className="text-[10px] font-mono uppercase tracking-wider text-moss-800 font-semibold block">
+            {currentSubject?.name || 'Mata Pelajaran'} · {currentChapter?.title || 'Bab Pelajaran'}
           </span>
-          <h1 className="text-2xl sm:text-3xl font-serif text-ink-950 font-medium">
+          <h1 className="text-xl sm:text-2xl font-serif font-medium text-ink-950 mt-0.5">
             {selectedConcept.title}
           </h1>
         </div>
 
-        <div className="flex items-center gap-3">
-          <button
-            onClick={() => onOpenTimer(selectedConcept.title, 8)}
-            className="btn-secondary text-xs py-1.5 px-3 font-mono"
-            title="Buka timer belajar"
-          >
-            <Clock className="w-3.5 h-3.5 text-moss-800" />
-            08:00
-          </button>
-          <span className="text-xs font-mono bg-paper-200 text-ink-700 px-2 py-1 rounded">
-            Langkah 0{currentStep} / 04
+        <div className="flex items-center gap-2 self-stretch sm:self-auto justify-between sm:justify-end">
+          <span className="text-xs font-mono text-ink-500 bg-paper-100 px-2.5 py-1 rounded border border-paper-200">
+            Langkah {currentStep} / 6
           </span>
+          <button
+            onClick={() => onOpenTimer(selectedConcept.title, 15)}
+            className="btn-secondary text-xs py-1 px-2.5 flex items-center gap-1 text-ink-600"
+          >
+            <Clock className="w-3.5 h-3.5" />
+            15m Target
+          </button>
         </div>
-      </div>
+      </header>
 
-      {/* STEP 1: DEFINISI MATERI & SUMBER RUJUKAN */}
+      {/* ── STEP 1: METHOD 01 — PRE-CHECK RETRIEVAL PRACTICE ──── */}
       {currentStep === 1 && (
         <div className="paper-sheet p-6 sm:p-8 space-y-6">
           <div className="flex items-center justify-between text-xs text-ink-500 font-mono pb-2 border-b border-paper-200">
-            <span>01 · PEMAHAMAN DASAR</span>
-            {selectedConcept.sources.length > 0 && (
-              <span className="text-moss-800">
-                📄 {selectedConcept.sources[0].snippet ? 'Dari Catatan Guru' : 'Materi Terdaftar'}
-              </span>
+            <span>01 · RETRIEVAL PRACTICE (UJI INGATAN AWAL)</span>
+            <span>Sebelum Membaca Ulang</span>
+          </div>
+
+          <div className="space-y-3">
+            <span className="badge-moss text-xs">Aturan Belajar PAHAM</span>
+            <h2 className="text-xl sm:text-2xl font-serif text-ink-950 font-medium leading-snug">
+              Jangan langsung membaca catatanmu.
+            </h2>
+            <p className="text-sm text-ink-700 font-serif leading-relaxed">
+              Tanpa melihat buku atau catatan guru, seberapa banyak yang masih kamu ingat tentang <strong>{selectedConcept.title}</strong>?
+            </p>
+          </div>
+
+          <div className="space-y-3">
+            <textarea
+              rows={3}
+              placeholder="Tuliskan apa yang kamu ingat (rumus, kata kunci, atau pengertian)..."
+              value={preRecallInput}
+              onChange={(e) => setPreRecallInput(e.target.value)}
+              className="w-full bg-paper-50 border border-paper-300 rounded p-3 text-xs sm:text-sm text-ink-900 focus:bg-paper-100 focus:border-moss-700 font-sans"
+            />
+
+            {!isPreRecallRevealed ? (
+              <div className="flex justify-between items-center pt-2">
+                <button
+                  type="button"
+                  onClick={() => setIsPreRecallRevealed(true)}
+                  className="btn-ghost text-xs text-ink-500"
+                >
+                  Belum ingat sama sekali? Langsung lihat catatan →
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setIsPreRecallRevealed(true)}
+                  disabled={!preRecallInput.trim()}
+                  className="btn-primary text-xs py-2 px-4 disabled:opacity-50"
+                >
+                  Bandingkan dengan Catatan Asli
+                  <ArrowRight className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            ) : (
+              <div className="p-4 bg-moss-50 rounded border border-moss-300 space-y-2 text-xs">
+                <span className="font-semibold text-moss-900 font-mono text-[11px] block uppercase">
+                  Catatan Sekolah Asli:
+                </span>
+                <p className="font-serif italic text-ink-900 text-sm leading-relaxed">
+                  "{selectedConcept.definition}"
+                </p>
+                <p className="text-[11px] text-ink-600 font-serif pt-1 border-t border-moss-200">
+                  Perhatikan apakah ada bagian yang terlewat dari ingatanmu sebelumnya.
+                </p>
+              </div>
             )}
           </div>
 
-          <div className="space-y-4">
-            <h3 className="font-serif text-xl text-ink-950 font-medium leading-relaxed">
-              "{selectedConcept.definition}"
-            </h3>
+          {isPreRecallRevealed && (
+            <div className="pt-4 border-t border-paper-200 flex justify-end">
+              <button
+                onClick={() => setCurrentStep(2)}
+                className="btn-primary text-xs py-2 px-4 shadow-subtle flex items-center gap-1.5"
+              >
+                Lanjut ke Intisari Konsep
+                <ArrowRight className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          )}
+        </div>
+      )}
 
-            {/* Grounding Reference */}
-            {selectedConcept.sources.length > 0 && (
-              <div className="bg-paper-100 p-3.5 rounded border border-paper-200 text-xs text-ink-700 space-y-1">
-                <span className="text-[10px] font-mono uppercase text-ink-400 font-semibold block">
-                  Rujukan Catatan:
-                </span>
-                <p className="font-mono text-[11px] text-ink-800">
-                  {selectedConcept.sources[0].snippet}
-                </p>
-                <span className="text-[10px] text-moss-800 block">
-                  Halaman {selectedConcept.sources[0].pageNumber} · Catatan Guru
-                </span>
-              </div>
-            )}
+      {/* ── STEP 2: CONCEPT FOUNDATION & DUAL REPRESENTATION ─── */}
+      {currentStep === 2 && (
+        <div className="paper-sheet p-6 sm:p-8 space-y-6">
+          <div className="flex items-center justify-between text-xs text-ink-500 font-mono pb-2 border-b border-paper-200">
+            <span>02 · INTISARI MATERI SEKOLAH</span>
+            <span>Tingkat Kesulitan: Level {selectedConcept.difficultyLevel}/5</span>
+          </div>
+
+          <div className="space-y-4">
+            <div className="p-4 bg-paper-50 rounded border border-paper-300 space-y-2">
+              <span className="text-[10px] font-mono uppercase text-ink-500 font-semibold block">Definisi Inti</span>
+              <p className="font-serif text-ink-950 text-base sm:text-lg leading-relaxed">
+                {selectedConcept.definition}
+              </p>
+            </div>
 
             {/* Key Pointers */}
-            <div className="space-y-2 pt-2">
+            <div className="space-y-2 pt-1">
               <span className="text-xs font-semibold text-ink-800 uppercase tracking-wider block">
-                Poin Kunci yang Harus Diingat:
+                Poin Kunci & Pembeda Soal:
               </span>
               <ul className="space-y-1.5 text-xs sm:text-sm text-ink-700">
                 {selectedConcept.keyPoints.map((kp: string, idx: number) => (
@@ -213,7 +295,13 @@ export const LearnView: React.FC<LearnViewProps> = ({
               </ul>
             </div>
 
-            {/* Contextual Study Assistant Bar */}
+            {/* Example Dual Representation */}
+            <div className="p-3.5 bg-paper-100 rounded border border-paper-200 space-y-1 text-xs">
+              <span className="font-mono text-[10px] uppercase text-moss-800 font-semibold block">Contoh Kasus / Soal</span>
+              <p className="font-serif italic text-ink-900 text-sm">"{selectedConcept.example}"</p>
+            </div>
+
+            {/* Study Assistant Trigger Bar */}
             <div className="p-3 bg-paper-100 rounded border border-paper-200 flex flex-wrap items-center justify-between gap-2 text-xs">
               <span className="text-ink-600 font-serif flex items-center gap-1.5">
                 <Sparkles className="w-3.5 h-3.5 text-moss-800" />
@@ -233,65 +321,14 @@ export const LearnView: React.FC<LearnViewProps> = ({
                 <button
                   type="button"
                   onClick={() => {
-                    setAssistantAction('give_hint');
+                    setAssistantAction('give_example');
                     setIsAssistantOpen(true);
                   }}
                   className="btn-secondary text-[11px] py-1 px-2.5"
                 >
-                  Kasih Petunjuk
+                  Beri Contoh Lain
                 </button>
               </div>
-            </div>
-          </div>
-
-          <div className="pt-4 border-t border-paper-200 flex justify-end">
-            <button
-              onClick={() => setCurrentStep(2)}
-              className="btn-primary text-xs py-2 px-4"
-            >
-              Lihat Contoh Konkret
-              <ArrowRight className="w-4 h-4" />
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* STEP 2: CONTOH NYATA & ILUSTRASI */}
-      {currentStep === 2 && (
-        <div className="paper-sheet p-6 sm:p-8 space-y-6">
-          <div className="flex items-center justify-between text-xs text-ink-500 font-mono pb-2 border-b border-paper-200">
-            <span>02 · CONTOH KONKRET</span>
-            <span>Konteks Soal / Keseharian</span>
-          </div>
-
-          <div className="space-y-4">
-            <span className="text-xs font-semibold text-ink-500 uppercase tracking-wider block">
-              Contoh Kasus:
-            </span>
-            <div className="p-4 rounded bg-moss-50 border border-moss-200 text-ink-900 text-sm sm:text-base font-serif leading-relaxed italic">
-              "{selectedConcept.example}"
-            </div>
-
-            <p className="text-xs sm:text-sm text-ink-700 leading-relaxed font-sans">
-              Dalam ulangan atau ujian, pertanyaan sering kali tidak menanyakan definisi secara mentah, melainkan menguji kemampuanmu mengidentifikasi contoh seperti di atas.
-            </p>
-
-            {/* Contextual Study Assistant Trigger */}
-            <div className="p-3 bg-paper-100 rounded border border-paper-200 flex flex-wrap items-center justify-between gap-2 text-xs">
-              <span className="text-ink-600 font-serif flex items-center gap-1.5">
-                <Sparkles className="w-3.5 h-3.5 text-moss-800" />
-                Mau contoh kasus lain?
-              </span>
-              <button
-                type="button"
-                onClick={() => {
-                  setAssistantAction('give_example');
-                  setIsAssistantOpen(true);
-                }}
-                className="btn-secondary text-[11px] py-1 px-2.5"
-              >
-                Beri Contoh Lain
-              </button>
             </div>
           </div>
 
@@ -304,79 +341,63 @@ export const LearnView: React.FC<LearnViewProps> = ({
             </button>
             <button
               onClick={() => setCurrentStep(3)}
-              className="btn-primary text-xs py-2 px-4"
+              className="btn-primary text-xs py-2 px-4 shadow-subtle"
             >
-              Coba Jelaskan Sendiri
-              <ArrowRight className="w-4 h-4" />
+              Coba Jelaskan Sendiri (Elaborasi)
+              <ArrowRight className="w-3.5 h-3.5" />
             </button>
           </div>
         </div>
       )}
 
-      {/* STEP 3: ACTIVE RECALL / SELF-EXPLANATION */}
+      {/* ── STEP 3: METHOD 06 — ELABORATION (EXPLAIN TO A PEER) ── */}
       {currentStep === 3 && (
         <div className="paper-sheet p-6 sm:p-8 space-y-6">
           <div className="flex items-center justify-between text-xs text-ink-500 font-mono pb-2 border-b border-paper-200">
-            <span>03 · ACTIVE RECALL</span>
-            <span>Uji Pemahaman Sendiri</span>
+            <span>03 · ELABORASI & ANALOGI</span>
+            <span>Feynman Technique</span>
           </div>
 
-          <div className="space-y-4">
-            <h3 className="font-serif text-lg text-ink-950 font-medium">
-              Coba jelaskan dengan kata-katamu sendiri:
-            </h3>
-            <p className="text-xs sm:text-sm text-ink-600 font-serif">
-              Apa inti dari <strong>{selectedConcept.title}</strong> dan bagaimana cara membedakannya agar tidak tertukar saat ulangan?
+          <div className="space-y-2">
+            <span className="badge-moss text-xs">Uji Pemahaman Mendalam</span>
+            <h2 className="text-xl font-serif text-ink-950 font-medium">
+              Bagaimana kamu menjelaskannya ke temanmu?
+            </h2>
+            <p className="text-xs sm:text-sm text-ink-700 font-serif leading-relaxed">
+              Tuliskan penjelasan singkat dengan kalimatmu sendiri atau berikan contoh analogi sederhana.
             </p>
+          </div>
 
+          <div className="space-y-3">
             <textarea
               rows={4}
-              value={selfExplanationInput}
-              onChange={(e) => setSelfExplanationInput(e.target.value)}
-              placeholder="Tulis penjelasan singkatmu di sini (misal: Penokohan adalah cara pengarang menggambarkan sifat...)"
-              className="w-full bg-paper-100 border border-paper-300 rounded p-3 text-xs sm:text-sm text-ink-900 focus:bg-paper-50 focus:border-moss-700 leading-relaxed"
+              placeholder={`Contoh: "${selectedConcept.title} itu seperti..."`}
+              value={elaborationInput}
+              onChange={(e) => setElaborationInput(e.target.value)}
+              className="w-full bg-paper-50 border border-paper-300 rounded p-3 text-xs sm:text-sm text-ink-900 focus:bg-paper-100 focus:border-moss-700 font-sans"
             />
 
-            {!analysisResult && (
+            <div className="flex justify-end">
               <button
-                onClick={handleAnalyzeExplanation}
-                disabled={!selfExplanationInput.trim() || isAnalyzingExplanation}
-                className="btn-primary text-xs py-2 px-4 disabled:opacity-50"
+                type="button"
+                onClick={handleAnalyzeElaboration}
+                disabled={!elaborationInput.trim() || isAnalyzingElaboration}
+                className="btn-secondary text-xs py-2 px-4 flex items-center gap-1.5 disabled:opacity-50"
               >
-                {isAnalyzingExplanation ? (
-                  <span className="flex items-center gap-2">
-                    <span className="animate-pulse">Menganalisis penjelasanmu...</span>
-                  </span>
-                ) : (
-                  <span className="flex items-center gap-2">
-                    <Sparkles className="w-3.5 h-3.5 text-moss-200" />
-                    Periksa Pemahamanku
-                  </span>
-                )}
+                <Sparkles className="w-3.5 h-3.5 text-moss-800" />
+                {isAnalyzingElaboration ? 'Memeriksa...' : 'Cek Kualitas Penjelasan'}
               </button>
-            )}
+            </div>
 
-            {/* Smart Evaluation Feedback Box */}
-            {analysisResult && (
-              <div className={`p-4 rounded border text-xs sm:text-sm space-y-2 ${
-                analysisResult.isCorrect 
-                  ? 'bg-moss-50 border-moss-200 text-moss-950' 
-                  : 'bg-amber-50 border-amber-200 text-amber-950'
-              }`}>
-                <div className="flex items-center gap-2 font-semibold">
-                  {analysisResult.isCorrect ? (
-                    <CheckCircle className="w-4 h-4 text-moss-700" />
-                  ) : (
-                    <AlertCircle className="w-4 h-4 text-amber-700" />
-                  )}
-                  <span>{analysisResult.isCorrect ? 'Pemahaman Tepat!' : 'Perlu Diperjelas'}</span>
+            {elaborationFeedback && (
+              <div className="p-4 bg-paper-100 rounded border border-moss-300 space-y-2 text-xs">
+                <div className="flex items-center justify-between">
+                  <span className="font-semibold text-ink-900">Umpan Balik:</span>
+                  <span className={elaborationFeedback.isCorrect ? 'badge-moss' : 'badge-amber'}>
+                    Skor: {Math.round(elaborationFeedback.score * 100)}%
+                  </span>
                 </div>
-                <p className="leading-relaxed">{analysisResult.feedbackText}</p>
-                {analysisResult.misconceptionIdentified && (
-                  <p className="text-xs text-amber-900 font-medium">
-                    ⚠ Catatan: {analysisResult.misconceptionIdentified}
-                  </p>
-                )}
+                <p className="font-serif text-ink-700 leading-relaxed">{elaborationFeedback.feedbackText}</p>
               </div>
             )}
           </div>
@@ -390,109 +411,215 @@ export const LearnView: React.FC<LearnViewProps> = ({
             </button>
             <button
               onClick={() => setCurrentStep(4)}
-              className="btn-primary text-xs py-2 px-4"
+              className="btn-primary text-xs py-2 px-4 shadow-subtle"
             >
-              Lanjut ke Cek Cepat
-              <ArrowRight className="w-4 h-4" />
+              Lanjut ke Latihan Soal
+              <ArrowRight className="w-3.5 h-3.5" />
             </button>
           </div>
         </div>
       )}
 
-      {/* STEP 4: QUICK APPLICATION CHECK & FSRS SCHEDULE RATING */}
+      {/* ── STEP 4: METHOD 03 & 04 — INTERLEAVED CHECK & FEEDBACK ── */}
       {currentStep === 4 && (
         <div className="paper-sheet p-6 sm:p-8 space-y-6">
           <div className="flex items-center justify-between text-xs text-ink-500 font-mono pb-2 border-b border-paper-200">
-            <span>04 · PENERAPAN CEPAT & FSRS</span>
-            <span>Simpan ke Memori Jangka Panjang</span>
+            <span>04 · LATIHAN APLIKASI (INTERLEAVED)</span>
+            <span>Strategi & Eksekusi</span>
           </div>
 
-          {/* Quick Scenario Question */}
           <div className="space-y-4">
-            <p className="text-xs font-mono uppercase tracking-wider text-ink-500 font-semibold">
-              Pertanyaan Penguji:
-            </p>
-            <p className="text-sm sm:text-base font-serif text-ink-950 leading-relaxed">
-              Jika dalam sebuah cerita narator langsung menulis: <em>"Budi adalah anak yang sangat penyabar dan jarang marah,"</em> metode penggambaran watak tersebut adalah...
-            </p>
+            <div className="p-4 bg-paper-50 rounded border border-paper-300 space-y-2">
+              <span className="text-[10px] font-mono uppercase text-ink-500 font-semibold block">Soal Pemahaman</span>
+              <p className="font-serif text-ink-950 text-sm sm:text-base font-medium">
+                Manakah pernyataan di bawah ini yang paling tepat menggambarkan aplikasi dari <strong>{selectedConcept.title}</strong>?
+              </p>
+            </div>
 
             <div className="space-y-2">
               {[
-                { id: 'opt-1', text: 'Metode Analitik (Penggambaran langsung oleh pengarang)', isCorrect: true },
-                { id: 'opt-2', text: 'Metode Dramatik (Melalui dialog atau perilaku)', isCorrect: false },
-                { id: 'opt-3', text: 'Bukan penokohan melainkan alur maju', isCorrect: false },
-              ].map(opt => (
+                { id: 'opt-a', text: `${selectedConcept.example} (Aplikasi Konsep yang Tepat)`, isCorrect: true },
+                { id: 'opt-b', text: `Hanya membaca definisi tanpa menghubungkannya dengan konteks soal.`, isCorrect: false },
+                { id: 'opt-c', text: `Menghafal rumus secara mekanis tanpa memahami arti variabelnya.`, isCorrect: false },
+              ].map((opt) => (
                 <button
                   key={opt.id}
                   onClick={() => {
-                    setSelectedOptionId(opt.id);
-                    setIsAnswerRevealed(true);
+                    if (!isAnswerRevealed) setSelectedOptionId(opt.id);
                   }}
-                  className={`w-full p-3 rounded border text-left text-xs sm:text-sm transition flex items-center justify-between ${
-                    isAnswerRevealed
-                      ? opt.isCorrect
-                        ? 'bg-moss-100 border-moss-700 text-moss-950 font-medium'
-                        : selectedOptionId === opt.id
-                        ? 'bg-terracotta-100 border-terracotta-400 text-terracotta-900'
-                        : 'border-paper-200 opacity-60'
-                      : 'border-paper-300 hover:bg-paper-100 text-ink-800'
+                  className={`w-full p-3 text-left rounded border text-xs sm:text-sm transition flex items-start justify-between gap-2 ${
+                    selectedOptionId === opt.id
+                      ? 'bg-moss-100 border-moss-400 font-medium text-ink-950'
+                      : 'bg-paper-50 border-paper-200 hover:bg-paper-100 text-ink-800'
                   }`}
                 >
                   <span>{opt.text}</span>
-                  {isAnswerRevealed && opt.isCorrect && (
-                    <Check className="w-4 h-4 text-moss-700 shrink-0" />
-                  )}
+                  {selectedOptionId === opt.id && <Check className="w-4 h-4 text-moss-800 shrink-0 mt-0.5" />}
                 </button>
               ))}
             </div>
 
-            {isAnswerRevealed && (
-              <div className="p-3 bg-paper-100 rounded border border-paper-200 text-xs text-ink-700 leading-relaxed font-serif">
-                Tepat sekali! Karena pengarang langsung menyebutkan sifat "penyabar" secara tersurat, ini adalah teknik <strong>analitik</strong>.
+            {!isAnswerRevealed ? (
+              <div className="flex justify-end pt-2">
+                <button
+                  disabled={!selectedOptionId}
+                  onClick={() => setIsAnswerRevealed(true)}
+                  className="btn-primary text-xs py-2 px-4 disabled:opacity-50"
+                >
+                  Kunci Jawaban & Ulas
+                </button>
+              </div>
+            ) : (
+              <div className="p-4 bg-moss-50 rounded border border-moss-300 text-xs space-y-1">
+                <span className="font-semibold text-moss-900 flex items-center gap-1.5">
+                  <CheckCircle className="w-4 h-4 text-moss-700" />
+                  Jawaban Terverifikasi
+                </span>
+                <p className="font-serif text-ink-800 leading-relaxed">
+                  Dalam ulangan atau ujian, soal sering kali tidak menanyakan teks definisi mentah, melainkan kemampuan membedakan contoh kasus nyata seperti di atas.
+                </p>
               </div>
             )}
           </div>
 
-          {/* FSRS Memory Rating Buttons */}
-          <div className="pt-6 border-t border-paper-200 space-y-3">
-            <span className="text-xs font-mono uppercase tracking-wider text-ink-600 block text-center">
-              Seberapa mudah kamu mengingat materi ini?
-            </span>
-            <div className="grid grid-cols-4 gap-2">
-              <button
-                onClick={() => handleRateFSRS(1)}
-                className="p-2.5 rounded bg-paper-100 hover:bg-terracotta-100 border border-paper-300 text-xs text-center transition"
-              >
-                <span className="block font-medium text-terracotta-800">Ulangi</span>
-                <span className="text-[10px] text-ink-400">Besok (1d)</span>
-              </button>
-              <button
-                onClick={() => handleRateFSRS(2)}
-                className="p-2.5 rounded bg-paper-100 hover:bg-amber-100 border border-paper-300 text-xs text-center transition"
-              >
-                <span className="block font-medium text-amber-800">Sulit</span>
-                <span className="text-[10px] text-ink-400">2 hari (2d)</span>
-              </button>
-              <button
-                onClick={() => handleRateFSRS(3)}
-                className="p-2.5 rounded bg-moss-50 hover:bg-moss-100 border border-moss-300 text-xs text-center transition"
-              >
-                <span className="block font-medium text-moss-900">Paham</span>
-                <span className="text-[10px] text-moss-700">4 hari (4d)</span>
-              </button>
-              <button
-                onClick={() => handleRateFSRS(4)}
-                className="p-2.5 rounded bg-paper-100 hover:bg-moss-100 border border-paper-300 text-xs text-center transition"
-              >
-                <span className="block font-medium text-moss-900">Sangat Mudah</span>
-                <span className="text-[10px] text-ink-400">7 hari (7d)</span>
-              </button>
-            </div>
+          <div className="pt-4 border-t border-paper-200 flex items-center justify-between">
+            <button
+              onClick={() => setCurrentStep(3)}
+              className="btn-ghost text-xs py-2 px-3"
+            >
+              Kembali
+            </button>
+            <button
+              disabled={!isAnswerRevealed}
+              onClick={() => setCurrentStep(5)}
+              className="btn-primary text-xs py-2 px-4 shadow-subtle disabled:opacity-50"
+            >
+              Cek Keyakinan Memori
+              <ArrowRight className="w-3.5 h-3.5" />
+            </button>
           </div>
         </div>
       )}
 
-      {/* Grounded Study Assistant Panel */}
+      {/* ── STEP 5: METHOD 05 — METACOGNITIVE CALIBRATION ───── */}
+      {currentStep === 5 && (
+        <div className="paper-sheet p-6 sm:p-8 space-y-6">
+          <div className="flex items-center justify-between text-xs text-ink-500 font-mono pb-2 border-b border-paper-200">
+            <span>05 · CEK METAKOGNITIF (KALIBRASI KEYAKINAN)</span>
+            <span>Self-Monitoring</span>
+          </div>
+
+          <div className="space-y-3">
+            <span className="badge-moss text-xs">Evaluasi Mandiri</span>
+            <h2 className="text-xl sm:text-2xl font-serif text-ink-950 font-medium">
+              Seberapa yakin kamu bisa menjawab soal ini besok tanpa melihat catatan?
+            </h2>
+            <p className="text-xs sm:text-sm text-ink-600 font-serif leading-relaxed">
+              Kalibrasi yang jujur membantu PAHAM menjadwalkan review pada waktu yang paling tepat.
+            </p>
+          </div>
+
+          <div className="grid grid-cols-3 gap-3 pt-2 text-xs">
+            <button
+              onClick={() => setConfidenceLevel('low')}
+              className={`p-4 rounded border text-center transition ${
+                confidenceLevel === 'low' ? 'bg-terracotta-100 border-terracotta-400 font-bold text-terracotta-950' : 'bg-paper-50 border-paper-300 text-ink-800'
+              }`}
+            >
+              <span className="block font-serif text-sm">Belum Yakin</span>
+              <span className="text-[10px] text-ink-500 mt-1 block">Masih butuh bantuan</span>
+            </button>
+            <button
+              onClick={() => setConfidenceLevel('medium')}
+              className={`p-4 rounded border text-center transition ${
+                confidenceLevel === 'medium' ? 'bg-amber-100 border-amber-400 font-bold text-amber-950' : 'bg-paper-50 border-paper-300 text-ink-800'
+              }`}
+            >
+              <span className="block font-serif text-sm">Lumayan Paham</span>
+              <span className="text-[10px] text-ink-500 mt-1 block">Bisa dengan waktu</span>
+            </button>
+            <button
+              onClick={() => setConfidenceLevel('high')}
+              className={`p-4 rounded border text-center transition ${
+                confidenceLevel === 'high' ? 'bg-moss-100 border-moss-400 font-bold text-moss-950' : 'bg-paper-50 border-paper-300 text-ink-800'
+              }`}
+            >
+              <span className="block font-serif text-sm">Sangat Yakin</span>
+              <span className="text-[10px] text-ink-500 mt-1 block">Siap diuji ujian</span>
+            </button>
+          </div>
+
+          <div className="pt-4 border-t border-paper-200 flex items-center justify-between">
+            <button
+              onClick={() => setCurrentStep(4)}
+              className="btn-ghost text-xs py-2 px-3"
+            >
+              Kembali
+            </button>
+            <button
+              disabled={!confidenceLevel}
+              onClick={() => setCurrentStep(6)}
+              className="btn-primary text-xs py-2 px-4 shadow-subtle disabled:opacity-50"
+            >
+              Tetapkan Jadwal FSRS
+              <ArrowRight className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* ── STEP 6: METHOD 02 — SPACED REPETITION (FSRS RATING) ── */}
+      {currentStep === 6 && (
+        <div className="paper-sheet p-6 sm:p-8 space-y-6">
+          <div className="flex items-center justify-between text-xs text-ink-500 font-mono pb-2 border-b border-paper-200">
+            <span>06 · JADWAL PENGULANGAN MEMORI (FSRS)</span>
+            <span>Simpan Status</span>
+          </div>
+
+          <div className="space-y-3">
+            <span className="badge-moss text-xs">Selesai Belajar</span>
+            <h2 className="text-xl sm:text-2xl font-serif text-ink-950 font-medium">
+              Bagaimana tingkat kemudahan sesi ini?
+            </h2>
+            <p className="text-xs sm:text-sm text-ink-600 font-serif leading-relaxed">
+              PAHAM akan menghitung interval hari pengulangan berikutnya agar kamu tidak lupa sebelum ulangan:
+            </p>
+          </div>
+
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 pt-2">
+            <button
+              onClick={() => handleRateFSRS(1)}
+              className="p-3 rounded bg-paper-100 hover:bg-terracotta-100 border border-paper-300 text-xs text-center transition"
+            >
+              <span className="block font-medium text-terracotta-800 text-sm">Ulangi</span>
+              <span className="text-[10px] text-ink-500">Besok (1 hari)</span>
+            </button>
+            <button
+              onClick={() => handleRateFSRS(2)}
+              className="p-3 rounded bg-paper-100 hover:bg-amber-100 border border-paper-300 text-xs text-center transition"
+            >
+              <span className="block font-medium text-amber-800 text-sm">Sulit</span>
+              <span className="text-[10px] text-ink-500">2 hari lagi</span>
+            </button>
+            <button
+              onClick={() => handleRateFSRS(3)}
+              className="p-3 rounded bg-moss-50 hover:bg-moss-100 border border-moss-300 text-xs text-center transition"
+            >
+              <span className="block font-medium text-moss-900 text-sm">Paham</span>
+              <span className="text-[10px] text-moss-700 font-bold">4 hari lagi</span>
+            </button>
+            <button
+              onClick={() => handleRateFSRS(4)}
+              className="p-3 rounded bg-paper-100 hover:bg-moss-100 border border-paper-300 text-xs text-center transition"
+            >
+              <span className="block font-medium text-moss-900 text-sm">Sangat Mudah</span>
+              <span className="text-[10px] text-ink-500">7 hari lagi</span>
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Grounded Study Assistant Drawer */}
       <StudyAssistantDrawer
         isOpen={isAssistantOpen}
         onClose={() => setIsAssistantOpen(false)}

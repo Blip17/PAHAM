@@ -20,6 +20,7 @@ import { AuthPanel } from './entry/AuthPanel';
 import { OnboardingShell } from './onboarding/OnboardingShell';
 import { BrandTransition } from './onboarding/BrandTransition';
 import { ArrivalScreen } from './onboarding/ArrivalScreen';
+import { TutorialFlow } from './tutorial/TutorialFlow';
 // Services
 import { authService } from './services/authService';
 import { initializeDatabaseSeed } from './core/db';
@@ -43,6 +44,7 @@ export function App() {
   const [activeTab, setActiveTab] = useState<string>('home');
   const [isScanModalOpen, setIsScanModalOpen] = useState(false);
   const [isTimerModalOpen, setIsTimerModalOpen] = useState(false);
+  const [isTutorialOpen, setIsTutorialOpen] = useState(false);
   const [activeTimerConceptTitle, setActiveTimerConceptTitle] = useState<string | null>(null);
   const [activeTimerMinutes, setActiveTimerMinutes] = useState<number>(25);
   const [selectedConceptId, setSelectedConceptId] = useState<string | undefined>(undefined);
@@ -136,6 +138,7 @@ export function App() {
       setUserProfile(saved);
     }
     setAppState('app');
+    setIsTutorialOpen(true);
   };
 
   // Main app navigation
@@ -290,6 +293,7 @@ export function App() {
               userProfile={userProfile}
               onUpdateProfile={handleUpdateProfile}
               onLogout={handleLogout}
+              onReplayTutorial={() => setIsTutorialOpen(true)}
             />
           )}
         </AppShell>
@@ -305,6 +309,15 @@ export function App() {
           conceptTitle={activeTimerConceptTitle || 'Sesi Belajar Terfokus'}
           plannedMinutes={activeTimerMinutes}
         />
+        {isTutorialOpen && (
+          <TutorialFlow
+            onComplete={() => setIsTutorialOpen(false)}
+            onOpenScan={() => {
+              setIsTutorialOpen(false);
+              setIsScanModalOpen(true);
+            }}
+          />
+        )}
         <Analytics />
       </>
     );

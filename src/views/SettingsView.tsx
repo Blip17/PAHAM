@@ -7,11 +7,13 @@ import {
   RefreshCw, 
   CheckCircle, 
   AlertCircle, 
-  Download,
-  Plus,
-  Trash2,
-  LogOut,
-  User
+  Download, 
+  Plus, 
+  Trash2, 
+  LogOut, 
+  User,
+  RotateCcw,
+  BookOpen
 } from 'lucide-react';
 import { db, initializeDatabaseSeed } from '../core/db';
 import { UserProfile, GradeLevel, Semester, Subject, Chapter } from '../core/types';
@@ -22,12 +24,14 @@ interface SettingsViewProps {
   userProfile: UserProfile;
   onUpdateProfile: (profile: UserProfile) => Promise<void>;
   onLogout: () => void;
+  onReplayTutorial: () => void;
 }
 
 export const SettingsView: React.FC<SettingsViewProps> = ({
   userProfile,
   onUpdateProfile,
   onLogout,
+  onReplayTutorial,
 }) => {
   const [profile, setProfile] = useState<UserProfile>(userProfile);
   const [apiKeyInput, setApiKeyInput] = useState<string>('');
@@ -529,6 +533,32 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
             Muat Ulang 17 Mapel Standar
           </button>
         </div>
+      </div>
+
+      {/* 6. Panduan & Tutorial Replay */}
+      <div className="paper-sheet p-6 space-y-4">
+        <div className="flex items-center justify-between pb-3 border-b border-paper-200">
+          <div>
+            <span className="text-[10px] font-mono uppercase tracking-wider text-moss-800 font-semibold block">
+              Panduan Cara Belajar
+            </span>
+            <h3 className="font-serif text-lg font-medium text-ink-950">
+              Tutorial & Prinsip PAHAM
+            </h3>
+          </div>
+        </div>
+
+        <p className="text-xs text-ink-600 font-serif leading-relaxed">
+          Pelajari kembali bagaimana PAHAM menggunakan Retrieval Practice, penjadwalan memori FSRS, dan ekstraksi konsep dari catatan sekolahmu.
+        </p>
+
+        <button
+          onClick={onReplayTutorial}
+          className="btn-secondary text-xs py-2 px-3 flex items-center gap-1.5 text-moss-900 border-moss-300 hover:bg-moss-50"
+        >
+          <RotateCcw className="w-3.5 h-3.5" />
+          Ulangi Tutorial PAHAM
+        </button>
       </div>
 
     </div>

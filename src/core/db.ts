@@ -192,11 +192,31 @@ export const DEFAULT_INDONESIAN_SUBJECTS: Subject[] = [
   },
 ];
 
-// Clean initialization: Only seeds standard Indonesian subjects
+// Initialization: Check if this is first run or upgrade from old profile format
 export async function initializeDatabaseSeed() {
-  const subjectCount = await db.subjects.count();
-  if (subjectCount === 0) {
-    console.log('Initializing 17 standard Indonesian curriculum subjects...');
-    await db.subjects.bulkAdd(DEFAULT_INDONESIAN_SUBJECTS);
+  // For existing users who had profiles before the entry experience upgrade,
+  // mark their onboarding as complete so they don't get sent through the flow.
+  const existingProfile = await db.profiles.toCollection().first();
+  if (existingProfile && existingProfile.onboardingCompleted === undefined) {
+    // Legacy profile — upgrade it silently
+    const upgraded = {
+      ...existingProfile,
+      onboardingCompleted: true,
+      onboardingVersion: 1,
+      hasSeenArrival: true,
+      displayName: existingProfile.name,
+      updatedAt: new Date().toISOString(),
+    };
+    await db.profiles.put(upgraded);
+    console.log('[PAHAM] Upgraded legacy profile to v1 onboarding format.');
+  }
+
+  // Subjects are now seeded during onboarding (OnboardingShell.handleFinish)
+  // Only seed here as a fallback if somehow subjects are empty for an onboarded user
+  if (existingProfile?.onboardingCompleted) {
+    const subjectCount = await db.subjects.count();
+    if (subjectCount === 0) {
+      await db.subjects.bulkAdd(DEFAULT_INDONESIAN_SUBJECTS);
+    }
   }
 }

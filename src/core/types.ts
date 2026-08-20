@@ -3,15 +3,37 @@
 export type GradeLevel = 'Kelas 7' | 'Kelas 8' | 'Kelas 9' | 'Kelas 10' | 'Kelas 11' | 'Kelas 12';
 export type Semester = 'Semester 1' | 'Semester 2';
 
+export type EducationSystem = 'indonesia' | 'international';
+export type LearningMethod =
+  | 'latihan_soal'
+  | 'simulasi_ujian'
+  | 'penjelasan_singkat'
+  | 'langkah_demi_langkah'
+  | 'flashcard'
+  | 'campuran';
+export type StudyTimeSlot = '10-15' | '20-30' | '30-60' | '60+' | 'tidak_tentu';
+
 export interface UserProfile {
   id: string;
-  name: string;
+  name: string;                           // display name (panggilan)
   grade: GradeLevel;
   semester: Semester;
   schoolName: string;
   dailyTimeTargetMinutes: number;
   createdAt: string;
   updatedAt: string;
+  // Extended onboarding fields
+  displayName?: string;                   // "dipanggil apa" — short preferred name
+  schoolCity?: string;
+  schoolProvince?: string;
+  educationSystem?: EducationSystem;
+  curriculum?: string;                    // "Kurikulum Merdeka" | "K13" | "IB" | etc.
+  preferredLearningMethods?: LearningMethod[];
+  availableStudyTime?: StudyTimeSlot;
+  studyDays?: string[];
+  onboardingCompleted?: boolean;
+  onboardingVersion?: number;             // 1 = current spec
+  hasSeenArrival?: boolean;
 }
 
 export interface Subject {

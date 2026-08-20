@@ -11,12 +11,13 @@ import {
   TrendingUp, 
   Settings, 
   Camera, 
-  Play,
-  Menu,
-  X,
-  LogOut,
-  GraduationCap,
-  Sparkles
+  Play, 
+  Menu, 
+  X, 
+  LogOut, 
+  GraduationCap, 
+  Sparkles,
+  Calendar
 } from 'lucide-react';
 import { db } from '../../core/db';
 import { UserProfile, DailyStudyPlan, Concept } from '../../core/types';
@@ -69,6 +70,7 @@ export const AppShell: React.FC<AppShellProps> = ({
     { id: 'home', label: 'Beranda', icon: Home },
     { id: 'learn', label: 'Belajar', icon: BookOpen },
     { id: 'flashcards', label: 'Flashcards', icon: Layers },
+    { id: 'schedule', label: 'Jadwal & Target', icon: Calendar },
     { id: 'materials', label: 'Materi', icon: FileText },
     { id: 'quiz', label: 'Quiz', icon: HelpCircle },
     { id: 'exam', label: 'Ujian', icon: GraduationCap },
@@ -332,6 +334,19 @@ export const AppShell: React.FC<AppShellProps> = ({
 
             {/* Menu Items */}
             <div className="space-y-1 text-sm font-sans">
+              <button
+                onClick={() => {
+                  setIsMobileMenuOpen(false);
+                  onSelectTab('schedule');
+                }}
+                className={`w-full flex items-center gap-3 p-3 rounded text-left transition ${
+                  currentTab === 'schedule' ? 'bg-paper-200 font-semibold text-ink-950' : 'hover:bg-paper-150 text-ink-800'
+                }`}
+              >
+                <Calendar className="w-4 h-4 text-moss-800" />
+                <span>Jadwal & Target Belajar</span>
+              </button>
+
               <button
                 onClick={() => {
                   setIsMobileMenuOpen(false);

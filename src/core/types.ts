@@ -464,3 +464,98 @@ export interface LearningMethodRecommendation {
   alternativeMethods: Array<{ method: StudyMode; label: string; reason: string }>;
 }
 
+// ────────────────────────────────────────────────────────────
+// STUDY STUDIO, GOALS, SCHEDULES & NOTIFICATIONS
+// ────────────────────────────────────────────────────────────
+
+export type OutcomeType = 
+  | 'RECALL_OUTCOME'
+  | 'APPLICATION_OUTCOME'
+  | 'COVERAGE_OUTCOME'
+  | 'EXAM_OUTCOME'
+  | 'VOCABULARY_OUTCOME';
+
+export interface ExpectedOutcome {
+  id: string;
+  description: string;
+  outcomeType: OutcomeType;
+  isAchieved?: boolean;
+}
+
+export type GoalType = 
+  | 'EXAM_GOAL'
+  | 'MASTERY_GOAL'
+  | 'HABIT_GOAL'
+  | 'COVERAGE_GOAL'
+  | 'REVIEW_GOAL';
+
+export type GoalStatus = 'ACTIVE' | 'UPCOMING' | 'COMPLETED' | 'PAUSED';
+
+export interface StudyGoal {
+  id: string;
+  studentId?: string;
+  title: string;
+  subjectId: string;
+  chapterId?: string;
+  conceptIds?: string[];
+  goalType: GoalType;
+  targetDate: string; // ISO date
+  desiredOutcome: string;
+  weeklyFrequency: number;
+  availableMinutesPerSession: number;
+  priority: 'high' | 'medium' | 'low';
+  progressPercentage: number;
+  status: GoalStatus;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export type DayOfWeek = 'mon' | 'tue' | 'wed' | 'thu' | 'fri' | 'sat' | 'sun';
+
+export interface StudyWindow {
+  day: DayOfWeek;
+  startTime: string; // "17:00"
+  endTime: string;   // "18:00"
+  isEnabled: boolean;
+}
+
+export type ScheduleBlockStatus = 
+  | 'PLANNED'
+  | 'UPCOMING'
+  | 'IN_PROGRESS'
+  | 'COMPLETED'
+  | 'SKIPPED'
+  | 'RESCHEDULED';
+
+export interface ScheduledStudyBlock {
+  id: string;
+  date: string; // YYYY-MM-DD
+  startTime: string; // "17:00"
+  endTime: string;   // "17:20"
+  subjectId: string;
+  subjectName: string;
+  conceptIds: string[];
+  conceptTitle: string;
+  mode: StudyMode;
+  goalId?: string;
+  reason: string;
+  expectedOutcomes: ExpectedOutcome[];
+  status: ScheduleBlockStatus;
+  plannedDurationMinutes: number;
+  completedMinutes?: number;
+}
+
+export interface NotificationPreference {
+  enabled: boolean;
+  studyReminders: boolean;
+  examReminders: boolean;
+  reviewReminders: boolean;
+  dailyPlanning: boolean;
+  reminderLeadMinutes: 0 | 5 | 10 | 15;
+  frequency: 'low' | 'normal' | 'high';
+  quietHoursStart: string; // "22:00"
+  quietHoursEnd: string;   // "06:30"
+  lastNotifiedAt?: string;
+  permissionState: 'default' | 'granted' | 'denied' | 'unsupported';
+}
+

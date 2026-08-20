@@ -1,5 +1,5 @@
-// Home View for PAHAM
-// Editorial Study Command Center — answering "What should I study? Why? How? For how long? When will I see it again?"
+// Home View for PAHAM Study Studio
+// 5-Layer Editorial Learning Architecture: Greeting -> Hero Focus -> Expected Outcome -> Learning Path -> Goals & Timetable
 
 import React, { useState, useEffect } from 'react';
 import { 
@@ -9,7 +9,7 @@ import {
   Layers, 
   CheckCircle2, 
   AlertCircle, 
-  Calendar, 
+  Calendar as CalendarIcon, 
   Clock, 
   BookOpen, 
   ChevronRight,
@@ -19,7 +19,8 @@ import {
   Target,
   Flame,
   Zap,
-  Award
+  Award,
+  Check
 } from 'lucide-react';
 import { db } from '../core/db';
 import { 
@@ -32,11 +33,14 @@ import {
   DailyStudyPlan,
   DailyStudyItem,
   MistakeRecord,
-  Flashcard
+  Flashcard,
+  StudyGoal
 } from '../core/types';
 import { studyPlanner } from '../core/studyPlannerEngine';
 import { learningMethodSelector } from '../learning/engine/learningMethodSelector';
 import { flashcardService } from '../learning/flashcards/flashcardService';
+import { goalPlanner } from '../learning/goals/goalPlanner';
+import { scheduleService } from '../learning/schedule/scheduleService';
 
 interface HomeViewProps {
   userProfile: UserProfile;
@@ -46,6 +50,7 @@ interface HomeViewProps {
   onOpenExam: (examId: string) => void;
   onOpenMaterials: () => void;
   onOpenFlashcards?: () => void;
+  onOpenSchedule?: () => void;
 }
 
 export const HomeView: React.FC<HomeViewProps> = ({
@@ -56,6 +61,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
   onOpenExam,
   onOpenMaterials,
   onOpenFlashcards,
+  onOpenSchedule,
 }) => {
   const [studyPlan, setStudyPlan] = useState<DailyStudyPlan | null>(null);
   const [allConcepts, setAllConcepts] = useState<Concept[]>([]);
@@ -65,6 +71,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
   const [studentStatesMap, setStudentStatesMap] = useState<Map<string, StudentConceptState>>(new Map());
   const [recentMistakes, setRecentMistakes] = useState<MistakeRecord[]>([]);
   const [dueCardsCount, setDueCardsCount] = useState<number>(0);
+  const [activeGoals, setActiveGoals] = useState<StudyGoal[]>([]);
   
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [completedTaskIds, setCompletedTaskIds] = useState<Set<string>>(new Set());
@@ -81,11 +88,13 @@ export const HomeView: React.FC<HomeViewProps> = ({
       const states = await db.studentConceptStates.toArray();
       const mistakes = await db.mistakeRecords.toArray();
       const cards = await flashcardService.ensureCardsSeeded();
+      const goals = await goalPlanner.ensureGoalsSeeded();
 
       setAllConcepts(concepts);
       setAllSubjects(subjects);
       setAllChapters(chapters);
       setAllExams(exams);
+      setActiveGoals(goals);
       setRecentMistakes(mistakes.filter(m => !m.isResolved));
 
       const statesMap = new Map<string, StudentConceptState>();
@@ -104,7 +113,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
         subjects, 
         chapters, 
         exams, 
-        userProfile.dailyTimeTargetMinutes || 25
+        userProfile.dailyTimeTargetMinutes || 24
       );
       setStudyPlan(plan);
 
@@ -137,13 +146,13 @@ export const HomeView: React.FC<HomeViewProps> = ({
   const primarySubject = allSubjects.find(s => s.id === primaryTask?.subjectId);
   const primaryState = primaryConcept ? studentStatesMap.get(primaryConcept.id) : undefined;
 
-  // Selected method evaluation from our deterministic engine
+  // Selected method evaluation from deterministic selector
   const recommendation = primaryConcept ? learningMethodSelector.selectMethod({
     concept: primaryConcept,
     studentState: primaryState,
     recentMistakes,
     upcomingExams: allExams,
-    availableMinutes: userProfile.dailyTimeTargetMinutes || 25,
+    availableMinutes: userProfile.dailyTimeTargetMinutes || 24,
   }) : null;
 
   // Upcoming closest exam
@@ -155,13 +164,13 @@ export const HomeView: React.FC<HomeViewProps> = ({
     .filter(e => e.daysRemaining >= 0)
     .sort((a, b) => a.daysRemaining - b.daysRemaining)[0];
 
-  const totalTimeEstimated = studyPlan?.totalEstimatedMinutes || userProfile.dailyTimeTargetMinutes || 21;
+  const totalTimeEstimated = studyPlan?.totalEstimatedMinutes || userProfile.dailyTimeTargetMinutes || 24;
   const displayName = userProfile.displayName || userProfile.name || 'Siswa';
 
   if (isLoading) {
     return (
       <div className="py-24 text-center text-ink-500 font-serif">
-        Menghubungkan catatan sekolahmu ke rencana belajar hari ini...
+        Menyiapkan meja belajar PAHAM Study Studio...
       </div>
     );
   }
@@ -169,11 +178,11 @@ export const HomeView: React.FC<HomeViewProps> = ({
   return (
     <div className="space-y-8 max-w-5xl mx-auto pb-12">
 
-      {/* ── TOP GREETING BAR ─────────────────────────────────── */}
+      {/* ── LAYER 1: PERSONAL GREETING & HONEST DURATION ─────── */}
       <div className="flex flex-col sm:flex-row sm:items-baseline justify-between gap-2 border-b border-paper-300 pb-4">
         <div>
           <span className="text-[10px] font-mono uppercase tracking-widest text-moss-800 font-semibold block">
-            Pusat Belajar Harian · PAHAM
+            PAHAM Study Studio · Meja Belajar Personal
           </span>
           <h1 className="text-2xl sm:text-3xl font-serif text-ink-950 font-normal mt-0.5">
             Selamat belajar, {displayName}.
@@ -183,7 +192,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
         <div className="flex items-center gap-2 text-xs font-mono text-ink-600 bg-paper-100 px-3 py-1.5 rounded border border-paper-200">
           <Clock className="w-3.5 h-3.5 text-moss-700" />
           <span>
-            <strong className="text-ink-900">{totalTimeEstimated} menit</strong> cukup untuk hari ini
+            <strong className="text-ink-900">{totalTimeEstimated} menit</strong> worth using today
           </span>
         </div>
       </div>
@@ -209,31 +218,31 @@ export const HomeView: React.FC<HomeViewProps> = ({
         </div>
       )}
 
-      {/* ── MAIN ASYMMETRICAL EDITORIAL COMMAND CENTER ───────── */}
+      {/* ── 5-LAYER ASYMMETRICAL EDITORIAL SPREAD ─────────────── */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
 
-        {/* ── LEFT / LARGE AREA (8 COLUMNS): HERO STUDY CARD ──── */}
+        {/* ── LEFT / LARGE AREA (8 COLS): HERO FOCUS & OUTCOMES ── */}
         <div className="lg:col-span-8 space-y-6">
 
           {primaryTask && primaryConcept ? (
             <div className="paper-sheet p-6 sm:p-8 border-2 border-moss-800/80 shadow-md relative overflow-hidden space-y-6 bg-paper-50">
               
-              {/* Top Meta Line */}
+              {/* Layer 2 Header: Subject & Mode Badge */}
               <div className="flex items-center justify-between text-xs font-mono text-ink-500 border-b border-paper-200 pb-3">
                 <span className="uppercase tracking-wider font-semibold text-moss-900 flex items-center gap-1.5">
                   <Sparkles className="w-3.5 h-3.5 text-moss-700" />
-                  LANGKAH UTAMA HARI INI
+                  YOUR NEXT FOCUS
                 </span>
                 <span className="bg-moss-100 text-moss-900 px-2 py-0.5 rounded font-medium text-[11px]">
                   {primarySubject?.name || 'Mata Pelajaran'}
                 </span>
               </div>
 
-              {/* Central Concept & Big Numeric Duration */}
+              {/* Concept Title & Big Typographic Duration */}
               <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4">
                 <div className="space-y-1.5">
                   <span className="text-xs font-mono uppercase tracking-wider text-ink-500 block">
-                    {recommendation?.methodLabel || 'Recall + Practice'}
+                    {recommendation?.methodLabel || 'Recall → Practice'}
                   </span>
                   <h2 className="text-2xl sm:text-3xl font-serif text-ink-950 font-medium leading-snug">
                     {primaryConcept.title}
@@ -244,11 +253,11 @@ export const HomeView: React.FC<HomeViewProps> = ({
                   <span className="text-3xl sm:text-4xl font-bold text-moss-900">
                     {String(primaryTask.estimatedMinutes).padStart(2, '0')}
                   </span>
-                  <span className="text-xs text-ink-500 uppercase">Menit</span>
+                  <span className="text-xs text-ink-500 uppercase">Min</span>
                 </div>
               </div>
 
-              {/* Transparent "Why This Task?" Reasoning Box */}
+              {/* Transparent "Why This Task?" Rationale */}
               <div className="p-3.5 bg-paper-100 rounded border border-paper-300 space-y-1.5">
                 <span className="text-[10px] font-mono uppercase tracking-wider text-moss-800 font-semibold block">
                   Kenapa tugas ini dipilih?
@@ -258,13 +267,34 @@ export const HomeView: React.FC<HomeViewProps> = ({
                 </p>
               </div>
 
+              {/* ── LAYER 3: EXPECTED OUTCOME (Honest Objectives) ── */}
+              <div className="p-4 bg-paper-100/90 rounded border border-moss-200/80 space-y-2">
+                <span className="text-[10px] font-mono uppercase tracking-wider text-moss-900 font-semibold block">
+                  Target Hasil Sesi (Expected Outcome):
+                </span>
+                <div className="space-y-1.5 text-xs font-serif text-ink-800">
+                  <div className="flex items-start gap-2">
+                    <Check className="w-3.5 h-3.5 text-moss-700 mt-0.5 shrink-0" />
+                    <span>Mampu menjelaskan intisari {primaryConcept.title} tanpa membuka buku catatan.</span>
+                  </div>
+                  <div className="flex items-start gap-2">
+                    <Check className="w-3.5 h-3.5 text-moss-700 mt-0.5 shrink-0" />
+                    <span>Membedakan istilah kunci agar tidak tertukar saat ulangan.</span>
+                  </div>
+                  <div className="flex items-start gap-2">
+                    <Check className="w-3.5 h-3.5 text-moss-700 mt-0.5 shrink-0" />
+                    <span>Menyelesaikan 3 butir soal latihan adaptif tingkat menengah.</span>
+                  </div>
+                </div>
+              </div>
+
               {/* Dominant Primary Action Button */}
               <div className="flex flex-wrap items-center justify-between gap-3 pt-2">
                 <button
                   onClick={() => onStartStudy(primaryConcept.id)}
                   className="btn-primary text-sm py-3 px-6 shadow-md flex items-center gap-2 bg-moss-900 hover:bg-moss-950 text-paper-50 w-full sm:w-auto justify-center"
                 >
-                  <span>Mulai Belajar Sekarang</span>
+                  <span>MULAI SEKARANG</span>
                   <ArrowRight className="w-4 h-4" />
                 </button>
 
@@ -280,7 +310,6 @@ export const HomeView: React.FC<HomeViewProps> = ({
 
             </div>
           ) : (
-            /* Empty State if No Concepts Seeded Yet */
             <div className="paper-sheet p-8 text-center space-y-4 font-serif">
               <FileText className="w-10 h-10 text-ink-400 mx-auto" />
               <h3 className="text-lg text-ink-900 font-medium">Belum ada materi aktif.</h3>
@@ -297,15 +326,15 @@ export const HomeView: React.FC<HomeViewProps> = ({
             </div>
           )}
 
-          {/* ── TODAY'S PATH (VISUAL LEARNING SEQUENCE) ───────── */}
-          <div className="paper-sheet p-6 space-y-4">
+          {/* ── LAYER 4: TODAY'S LEARNING PATH (Curved/Vertical Path) ── */}
+          <div className="paper-sheet p-6 space-y-5">
             <div className="flex items-center justify-between border-b border-paper-200 pb-3">
               <div>
-                <span className="text-[10px] font-mono uppercase tracking-widest text-ink-500 font-semibold block">
-                  Alur Belajar Hari Ini
+                <span className="text-[10px] font-mono uppercase tracking-widest text-moss-800 font-semibold block">
+                  Signature Learning Path
                 </span>
                 <h3 className="font-serif text-lg font-medium text-ink-950">
-                  Jadwal & Agenda
+                  Alur Belajar Hari Ini
                 </h3>
               </div>
               <span className="text-xs font-mono text-ink-500">
@@ -313,13 +342,13 @@ export const HomeView: React.FC<HomeViewProps> = ({
               </span>
             </div>
 
-            <div className="space-y-2.5">
+            <div className="space-y-3 relative pl-4 border-l-2 border-moss-700/40 ml-2">
               {studyPlan?.items.map((item, index) => {
                 const isDone = completedTaskIds.has(item.id);
                 return (
                   <div
                     key={item.id}
-                    className={`p-3.5 rounded border transition flex items-center justify-between gap-3 ${
+                    className={`relative p-3.5 rounded border transition flex items-center justify-between gap-3 ${
                       isDone 
                         ? 'bg-paper-100/60 border-paper-200 opacity-60' 
                         : index === 0 
@@ -327,6 +356,17 @@ export const HomeView: React.FC<HomeViewProps> = ({
                         : 'bg-paper-50 border-paper-200 hover:border-paper-300'
                     }`}
                   >
+                    {/* Path Node Indicator */}
+                    <div 
+                      className={`absolute -left-[23px] top-1/2 -translate-y-1/2 w-3.5 h-3.5 rounded-full border-2 ${
+                        isDone 
+                          ? 'bg-moss-700 border-moss-700' 
+                          : index === 0 
+                          ? 'bg-paper-50 border-moss-700 animate-pulse' 
+                          : 'bg-paper-50 border-paper-400'
+                      }`}
+                    />
+
                     <div className="flex items-center gap-3">
                       <button
                         type="button"
@@ -371,10 +411,10 @@ export const HomeView: React.FC<HomeViewProps> = ({
 
         </div>
 
-        {/* ── RIGHT / NARROW COLUMN (4 COLUMNS): EXAM READINESS & FLASHCARDS ── */}
+        {/* ── RIGHT / NARROW COLUMN (4 COLS): EXAM, GOALS, TIMETABLE ── */}
         <div className="lg:col-span-4 space-y-6">
 
-          {/* 1. Exam Readiness Signal Card */}
+          {/* 1. Exam Readiness Signal */}
           {closestExam ? (
             <div className="paper-sheet p-5 space-y-4 border border-paper-300">
               <div className="flex items-center justify-between">
@@ -399,7 +439,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
               <div className="space-y-2.5 pt-2 border-t border-paper-200">
                 <div className="space-y-1">
                   <div className="flex justify-between text-[11px] font-mono text-ink-700">
-                    <span>KNOW (Pemahaman Definisi)</span>
+                    <span>KNOW (Definisi)</span>
                     <span>88%</span>
                   </div>
                   <div className="w-full h-1.5 bg-paper-200 rounded-full overflow-hidden">
@@ -409,7 +449,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
 
                 <div className="space-y-1">
                   <div className="flex justify-between text-[11px] font-mono text-ink-700">
-                    <span>RECALL (Daya Ingat Tanpa Catatan)</span>
+                    <span>RECALL (Uji Ingatan)</span>
                     <span>76%</span>
                   </div>
                   <div className="w-full h-1.5 bg-paper-200 rounded-full overflow-hidden">
@@ -419,7 +459,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
 
                 <div className="space-y-1">
                   <div className="flex justify-between text-[11px] font-mono text-ink-700">
-                    <span>APPLY (Penerapan Soal Campuran)</span>
+                    <span>APPLY (Aplikasi Soal)</span>
                     <span>61%</span>
                   </div>
                   <div className="w-full h-1.5 bg-paper-200 rounded-full overflow-hidden">
@@ -438,7 +478,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
             </div>
           ) : (
             <div className="paper-sheet p-5 space-y-3 border border-paper-200 text-center font-serif">
-              <Calendar className="w-6 h-6 text-ink-400 mx-auto" />
+              <CalendarIcon className="w-6 h-6 text-ink-400 mx-auto" />
               <h4 className="text-sm text-ink-900 font-medium">Belum Ada Jadwal Ulangan</h4>
               <p className="text-xs text-ink-500">
                 Tambahkan jadwal ulangan sekolah di menu Ujian untuk memprogram prioritas otomatis.
@@ -446,14 +486,43 @@ export const HomeView: React.FC<HomeViewProps> = ({
             </div>
           )}
 
-          {/* 2. Flashcard Queue Quick Access */}
+          {/* 2. My Goals Preview Strip */}
+          <div className="paper-sheet p-5 space-y-3 border border-paper-300 bg-paper-50">
+            <div className="flex items-center justify-between">
+              <span className="text-[10px] font-mono uppercase tracking-wider text-moss-800 font-semibold block">
+                Target Belajar Aktif
+              </span>
+              {onOpenSchedule && (
+                <button
+                  onClick={onOpenSchedule}
+                  className="text-xs font-mono text-ink-500 hover:text-moss-900"
+                >
+                  Kelola →
+                </button>
+              )}
+            </div>
+
+            {activeGoals.slice(0, 2).map((goal) => (
+              <div key={goal.id} className="p-2.5 rounded bg-paper-100 border border-paper-200 space-y-1.5">
+                <div className="flex items-center justify-between text-xs">
+                  <span className="font-serif font-medium text-ink-950">{goal.title}</span>
+                  <span className="font-mono text-[11px] text-moss-900 font-bold">{goal.progressPercentage}%</span>
+                </div>
+                <div className="w-full h-1 bg-paper-300 rounded-full overflow-hidden">
+                  <div className="h-full bg-moss-700 rounded-full" style={{ width: `${goal.progressPercentage}%` }} />
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {/* 3. Flashcard Queue Access */}
           <div className="paper-sheet p-5 space-y-3 bg-paper-100 border border-paper-300">
             <div className="flex items-center justify-between">
               <span className="text-[10px] font-mono uppercase tracking-wider text-ink-500 font-semibold block">
                 Antrean Flashcard FSRS
               </span>
               <span className="badge-moss text-[10px]">
-                {dueCardsCount} Jatuh Tempo
+                {dueCardsCount} Due
               </span>
             </div>
 
@@ -474,38 +543,31 @@ export const HomeView: React.FC<HomeViewProps> = ({
             )}
           </div>
 
-          {/* 3. Active Mistake Book Alert (If any) */}
-          {recentMistakes.length > 0 && (
-            <div className="paper-sheet p-4 bg-terracotta-50/70 border border-terracotta-200 space-y-2">
-              <div className="flex items-center gap-1.5 text-xs font-semibold text-terracotta-900">
-                <AlertCircle className="w-3.5 h-3.5 text-terracotta-700" />
-                <span>{recentMistakes.length} Catatan Kekeliruan Aktif</span>
-              </div>
-              <p className="text-xs text-terracotta-800 font-serif leading-relaxed">
-                Konsep "{recentMistakes[0]?.conceptTitle}" sempat tertukar saat latihan.
-              </p>
-              <button
-                onClick={() => onStartStudy(recentMistakes[0]?.conceptId)}
-                className="text-xs text-terracotta-900 font-mono underline hover:no-underline block"
-              >
-                Latihan Perbaikan Khusus →
-              </button>
-            </div>
-          )}
-
         </div>
 
       </div>
 
-      {/* ── SECONDARY "ATAU PILIH SENDIRI" SECTION ──────────── */}
+      {/* ── LAYER 5: SECONDARY LEARNING AREAS & TIMETABLE QUICK LINKS ── */}
       <section className="space-y-4 pt-4 border-t border-paper-200">
-        <div>
-          <span className="text-[10px] font-mono uppercase tracking-widest text-ink-400 font-semibold block">
-            Akses Langsung Mandiri
-          </span>
-          <h3 className="text-lg font-serif text-ink-900 font-medium">
-            Atau Pilih Sendiri Cara Belajarmu
-          </h3>
+        <div className="flex items-center justify-between">
+          <div>
+            <span className="text-[10px] font-mono uppercase tracking-widest text-ink-400 font-semibold block">
+              Akses Langsung Mandiri
+            </span>
+            <h3 className="text-lg font-serif text-ink-900 font-medium">
+              Eksplorasi Studio Belajar
+            </h3>
+          </div>
+
+          {onOpenSchedule && (
+            <button
+              onClick={onOpenSchedule}
+              className="text-xs font-mono text-moss-900 hover:underline flex items-center gap-1"
+            >
+              <CalendarIcon className="w-3.5 h-3.5" />
+              Buka Jadwal & Target Lengkap →
+            </button>
+          )}
         </div>
 
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
@@ -527,7 +589,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
             <Target className="w-5 h-5 text-moss-800 group-hover:scale-105 transition-transform" />
             <div>
               <h4 className="text-xs font-semibold text-ink-950">Latihan Adaptif</h4>
-              <p className="text-[11px] text-ink-500 font-serif">Soal dinamis multi-level</p>
+              <p className="text-[11px] text-ink-500 font-serif">Multi-level practice</p>
             </div>
           </button>
 
@@ -538,7 +600,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
             <BookOpen className="w-5 h-5 text-moss-800 group-hover:scale-105 transition-transform" />
             <div>
               <h4 className="text-xs font-semibold text-ink-950">Belajar Konsep</h4>
-              <p className="text-[11px] text-ink-500 font-serif">Intisari & Feynman method</p>
+              <p className="text-[11px] text-ink-500 font-serif">Intisari & teach-back</p>
             </div>
           </button>
 

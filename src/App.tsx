@@ -8,6 +8,7 @@ import { HomeView } from './views/HomeView';
 import { MaterialsView } from './views/MaterialsView';
 import { LearnView } from './views/LearnView';
 import { FlashcardsView } from './views/FlashcardsView';
+import { ScheduleView } from './views/ScheduleView';
 import { QuizView } from './views/QuizView';
 import { ExamSimulationView } from './views/ExamSimulationView';
 import { ProgressView } from './views/ProgressView';
@@ -258,12 +259,18 @@ export function App() {
               onOpenExam={handleOpenExam}
               onOpenMaterials={() => setActiveTab('materials')}
               onOpenFlashcards={() => setActiveTab('flashcards')}
+              onOpenSchedule={() => setActiveTab('schedule')}
             />
           )}
           {activeTab === 'flashcards' && (
             <FlashcardsView
               initialConceptId={selectedConceptId}
               onStartLearnConcept={handleStartStudy}
+            />
+          )}
+          {activeTab === 'schedule' && (
+            <ScheduleView
+              onStartStudyConcept={handleStartStudy}
             />
           )}
           {activeTab === 'materials' && (

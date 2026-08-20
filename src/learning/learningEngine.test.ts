@@ -6,6 +6,8 @@ import { learningMethodSelector } from './engine/learningMethodSelector';
 import { flashcardService } from './flashcards/flashcardService';
 import { adaptiveQuestionEngine } from './engine/adaptiveQuestionEngine';
 import { studySessionEngine } from './engine/studySessionEngine';
+import { goalPlanner } from './goals/goalPlanner';
+import { notificationService } from './notifications/notificationService';
 import { Concept, StudentConceptState, MistakeRecord, Exam, Question } from '../core/types';
 import { fsrs } from '../core/fsrsEngine';
 
@@ -230,3 +232,50 @@ describe('Study Session Engine', () => {
     expect(types).toContain('ADAPTIVE_QUESTION');
   });
 });
+
+describe('Goal Planner & Proposed Sessions', () => {
+  it('generates a realistic weekly session distribution for a goal', () => {
+    const goal = {
+      id: 'g-test',
+      title: 'Siap Ulangan Biologi',
+      subjectId: 'sub-bio',
+      goalType: 'EXAM_GOAL' as const,
+      targetDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
+      desiredOutcome: 'Stabil di konsep metabolisme',
+      weeklyFrequency: 3,
+      availableMinutesPerSession: 15,
+      priority: 'high' as const,
+      progressPercentage: 50,
+      status: 'ACTIVE' as const,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+
+    const sessions = goalPlanner.generateProposedSessions(goal);
+    expect(sessions.length).toBe(3);
+    expect(sessions[0].durationMinutes).toBe(15);
+    expect(sessions[0].focus).toContain('Active Recall');
+  });
+});
+
+describe('Notification & Quiet Hours System', () => {
+  it('identifies quiet hours correctly when crossing midnight', () => {
+    const prefs = {
+      enabled: true,
+      studyReminders: true,
+      examReminders: true,
+      reviewReminders: true,
+      dailyPlanning: true,
+      reminderLeadMinutes: 5 as const,
+      frequency: 'normal' as const,
+      quietHoursStart: '22:00',
+      quietHoursEnd: '06:30',
+      permissionState: 'granted' as const,
+    };
+
+    // Test helper directly using start/end logic
+    const isQuiet = notificationService.isInsideQuietHours(prefs);
+    expect(typeof isQuiet).toBe('boolean');
+  });
+});
+

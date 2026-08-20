@@ -16,7 +16,9 @@ import {
   LearningEvent,
   DailyStudyPlan,
   Flashcard,
-  StudySession
+  StudySession,
+  StudyGoal,
+  ScheduledStudyBlock
 } from './types';
 
 export class PahamDatabase extends Dexie {
@@ -34,6 +36,8 @@ export class PahamDatabase extends Dexie {
   studyPlans!: Table<DailyStudyPlan, string>;
   flashcards!: Table<Flashcard, string>;
   studySessions!: Table<StudySession, string>;
+  goals!: Table<StudyGoal, string>;
+  scheduledBlocks!: Table<ScheduledStudyBlock, string>;
 
   constructor() {
     super('PahamDB');
@@ -52,6 +56,8 @@ export class PahamDatabase extends Dexie {
       studyPlans: 'date',
       flashcards: 'id, conceptId, subjectId, chapterId, cardType',
       studySessions: 'id, subjectId, mode, startedAt',
+      goals: 'id, subjectId, goalType, status, targetDate',
+      scheduledBlocks: 'id, date, subjectId, status, startTime',
     });
   }
 }

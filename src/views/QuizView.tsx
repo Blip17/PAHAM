@@ -400,22 +400,22 @@ export const QuizView: React.FC<QuizViewProps> = ({
             )}
           </div>
 
-          {/* Options */}
+          {/* Options with Tactile Interactive Feedback */}
           <div className="space-y-2.5">
             {currentQ.options?.map((opt: QuestionOption) => {
               const isSelected = selectedOptionId === opt.id;
-              let optStyle = 'border-paper-300 hover:bg-paper-100 text-ink-800';
+              let optStyle = 'border-paper-300 hover:bg-paper-100 hover:border-paper-400 text-ink-800';
 
               if (isAnswered) {
                 if (opt.isCorrect) {
-                  optStyle = 'bg-moss-100 border-moss-700 text-moss-950 font-medium';
+                  optStyle = 'bg-moss-100/90 border-moss-700 text-moss-950 font-semibold shadow-subtle';
                 } else if (isSelected && !opt.isCorrect) {
-                  optStyle = 'bg-terracotta-100 border-terracotta-500 text-terracotta-900';
+                  optStyle = 'bg-terracotta-100 border-terracotta-600 text-terracotta-950 anim-shake';
                 } else {
-                  optStyle = 'border-paper-200 opacity-50 text-ink-500';
+                  optStyle = 'border-paper-200 opacity-40 text-ink-400';
                 }
               } else if (isSelected) {
-                optStyle = 'bg-paper-200 border-moss-800 text-ink-950 font-medium';
+                optStyle = 'bg-moss-50/80 border-moss-800 text-ink-950 font-medium shadow-subtle';
               }
 
               return (
@@ -423,11 +423,11 @@ export const QuizView: React.FC<QuizViewProps> = ({
                   key={opt.id}
                   onClick={() => handleSelectOption(opt.id)}
                   disabled={isAnswered}
-                  className={`w-full p-3.5 rounded border text-left text-xs sm:text-sm transition flex items-start justify-between gap-3 ${optStyle}`}
+                  className={`w-full p-3.5 rounded border text-left text-xs sm:text-sm transition-all duration-150 flex items-start justify-between gap-3 ${optStyle} ${!isAnswered ? 'active:scale-[0.99] cursor-pointer' : 'cursor-default'}`}
                 >
-                  <span>{opt.text}</span>
+                  <span className="font-serif">{opt.text}</span>
                   {isAnswered && opt.isCorrect && (
-                    <Check className="w-4 h-4 text-moss-700 shrink-0 mt-0.5" />
+                    <Check className="w-4 h-4 text-moss-800 shrink-0 mt-0.5" />
                   )}
                   {isAnswered && isSelected && !opt.isCorrect && (
                     <XCircle className="w-4 h-4 text-terracotta-700 shrink-0 mt-0.5" />

@@ -1,7 +1,7 @@
-// Flashcards View for PAHAM
-// First-class Spaced Repetition Flashcard runner powered by FSRS engine and grounded in student school materials
+// Flashcards View for PAHAM Study Studio
+// First-class 3D Tactile Spaced Repetition Flashcard runner powered by FSRS engine & keyboard shortcuts
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { 
   RotateCcw, 
   CheckCircle2, 
@@ -13,7 +13,9 @@ import {
   Eye,
   Filter,
   Flame,
-  Clock
+  Clock,
+  Keyboard,
+  Award
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { db } from '../core/db';
@@ -70,7 +72,7 @@ export const FlashcardsView: React.FC<FlashcardsViewProps> = ({
 
   const currentCard = cards[currentIndex];
 
-  const handleRate = async (rating: FSRSRating) => {
+  const handleRate = useCallback(async (rating: FSRSRating) => {
     if (!currentCard) return;
 
     const { intervalDays } = await flashcardService.rateFlashcard(currentCard, rating);
@@ -91,7 +93,25 @@ export const FlashcardsView: React.FC<FlashcardsViewProps> = ({
       });
       setSessionCompleted(true);
     }
-  };
+  }, [currentCard, currentIndex, cards.length]);
+
+  // Keyboard accessibility: Space to flip, 1-4 to rate
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (sessionCompleted) return;
+      if (e.code === 'Space' || e.code === 'Enter') {
+        e.preventDefault();
+        setIsRevealed(prev => !prev);
+      } else if (isRevealed) {
+        if (e.key === '1') handleRate(1);
+        else if (e.key === '2') handleRate(2);
+        else if (e.key === '3') handleRate(3);
+        else if (e.key === '4') handleRate(4);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isRevealed, sessionCompleted, handleRate]);
 
   const handleRestart = async () => {
     const loaded = await flashcardService.getCardsByMode(selectedMode, initialConceptId, selectedSubjectId === 'all' ? undefined : selectedSubjectId);
@@ -112,21 +132,19 @@ export const FlashcardsView: React.FC<FlashcardsViewProps> = ({
     );
   }
 
-  // Count queues
-  const dueCount = cards.filter(c => new Date(c.fsrs.due) <= new Date()).length;
   const currentConcept = allConcepts.find(c => c.id === currentCard?.conceptId);
 
   return (
-    <div className="max-w-2xl mx-auto space-y-6">
+    <div className="max-w-2xl mx-auto space-y-6 pb-12">
       
       {/* ── Editorial Header & Mode Switcher ─────────────────── */}
       <header className="border-b border-paper-300 pb-5 space-y-4">
         <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-2">
           <div>
             <span className="text-[10px] font-mono uppercase tracking-widest text-moss-800 font-semibold block">
-              Spaced Repetition Flashcards
+              Spaced Repetition Flashcards · FSRS Engine
             </span>
-            <h1 className="text-3xl font-serif text-ink-950 font-normal mt-0.5">
+            <h1 className="text-2xl sm:text-3xl font-serif text-ink-950 font-normal mt-0.5">
               Flashcard Belajar
             </h1>
           </div>
@@ -150,7 +168,7 @@ export const FlashcardsView: React.FC<FlashcardsViewProps> = ({
           <button
             onClick={() => setSelectedMode('DUE')}
             className={`px-3 py-1.5 rounded transition flex items-center gap-1.5 ${
-              selectedMode === 'DUE' ? 'bg-moss-900 text-paper-50 font-bold' : 'bg-paper-100 text-ink-700 hover:bg-paper-200 border border-paper-300'
+              selectedMode === 'DUE' ? 'bg-moss-900 text-paper-50 font-bold shadow-subtle' : 'bg-paper-100 text-ink-700 hover:bg-paper-200 border border-paper-300'
             }`}
           >
             <Clock className="w-3.5 h-3.5" />
@@ -159,7 +177,7 @@ export const FlashcardsView: React.FC<FlashcardsViewProps> = ({
           <button
             onClick={() => setSelectedMode('WEAK')}
             className={`px-3 py-1.5 rounded transition flex items-center gap-1.5 ${
-              selectedMode === 'WEAK' ? 'bg-moss-900 text-paper-50 font-bold' : 'bg-paper-100 text-ink-700 hover:bg-paper-200 border border-paper-300'
+              selectedMode === 'WEAK' ? 'bg-moss-900 text-paper-50 font-bold shadow-subtle' : 'bg-paper-100 text-ink-700 hover:bg-paper-200 border border-paper-300'
             }`}
           >
             <Flame className="w-3.5 h-3.5" />
@@ -168,7 +186,7 @@ export const FlashcardsView: React.FC<FlashcardsViewProps> = ({
           <button
             onClick={() => setSelectedMode('NEW')}
             className={`px-3 py-1.5 rounded transition flex items-center gap-1.5 ${
-              selectedMode === 'NEW' ? 'bg-moss-900 text-paper-50 font-bold' : 'bg-paper-100 text-ink-700 hover:bg-paper-200 border border-paper-300'
+              selectedMode === 'NEW' ? 'bg-moss-900 text-paper-50 font-bold shadow-subtle' : 'bg-paper-100 text-ink-700 hover:bg-paper-200 border border-paper-300'
             }`}
           >
             <Sparkles className="w-3.5 h-3.5" />
@@ -177,7 +195,7 @@ export const FlashcardsView: React.FC<FlashcardsViewProps> = ({
           <button
             onClick={() => setSelectedMode('TOPIC')}
             className={`px-3 py-1.5 rounded transition flex items-center gap-1.5 ${
-              selectedMode === 'TOPIC' ? 'bg-moss-900 text-paper-50 font-bold' : 'bg-paper-100 text-ink-700 hover:bg-paper-200 border border-paper-300'
+              selectedMode === 'TOPIC' ? 'bg-moss-900 text-paper-50 font-bold shadow-subtle' : 'bg-paper-100 text-ink-700 hover:bg-paper-200 border border-paper-300'
             }`}
           >
             <Layers className="w-3.5 h-3.5" />
@@ -207,12 +225,10 @@ export const FlashcardsView: React.FC<FlashcardsViewProps> = ({
             />
           </div>
 
-          {/* Large Hero Flashcard Surface */}
+          {/* Large Hero Flashcard Surface with Tactile Interaction */}
           <div
-            onClick={() => {
-              if (!isRevealed) setIsRevealed(true);
-            }}
-            className={`paper-sheet p-8 sm:p-12 min-h-[320px] flex flex-col justify-between border-2 cursor-pointer transition-all duration-300 select-none relative ${
+            onClick={() => setIsRevealed(prev => !prev)}
+            className={`paper-sheet p-8 sm:p-12 min-h-[320px] flex flex-col justify-between border-2 cursor-pointer transition-all duration-300 select-none relative card-interactive ${
               isRevealed 
                 ? 'border-moss-700 bg-paper-50 shadow-md' 
                 : 'border-paper-300 bg-paper-50 hover:border-paper-400 shadow-sm'
@@ -220,12 +236,12 @@ export const FlashcardsView: React.FC<FlashcardsViewProps> = ({
           >
             {/* Top Card Badge */}
             <div className="flex items-center justify-between text-[11px] font-mono text-ink-500">
-              <span className="uppercase tracking-wider">
+              <span className="uppercase tracking-wider font-semibold text-moss-900">
                 {isRevealed ? 'JAWABAN (BACK)' : 'PERTANYAAN (FRONT)'}
               </span>
               {currentCard.sourceReferences && currentCard.sourceReferences[0] && (
                 <span className="flex items-center gap-1 text-ink-600">
-                  <BookOpen className="w-3.5 h-3.5" />
+                  <BookOpen className="w-3.5 h-3.5 text-moss-700" />
                   {currentCard.sourceReferences[0].materialTitle} (Hal {currentCard.sourceReferences[0].pageNumber})
                 </span>
               )}
@@ -238,7 +254,7 @@ export const FlashcardsView: React.FC<FlashcardsViewProps> = ({
                   {currentCard.front}
                 </h2>
               ) : (
-                <div className="space-y-3 max-w-lg mx-auto animate-fadeIn">
+                <div className="space-y-3 max-w-lg mx-auto animate-fadeUp">
                   <p className="text-lg sm:text-xl font-serif text-ink-950 font-normal leading-relaxed whitespace-pre-line border-b border-paper-200 pb-3">
                     {currentCard.back}
                   </p>
@@ -266,13 +282,15 @@ export const FlashcardsView: React.FC<FlashcardsViewProps> = ({
                     <HelpCircle className="w-3.5 h-3.5" />
                     {showHint ? currentCard.hint : 'Lihat Petunjuk'}
                   </button>
-                  <span className="text-ink-400 font-mono text-[11px]">
-                    Ketuk kartu untuk melihat jawaban →
+                  <span className="text-ink-400 font-mono text-[11px] flex items-center gap-1">
+                    <Keyboard className="w-3 h-3 text-ink-400" />
+                    Spasi untuk balik kartu →
                   </span>
                 </>
               ) : (
-                <span className="text-moss-800 font-mono text-[11px] mx-auto">
-                  Pilih tingkat kemudahan mengingat di bawah untuk menjadwalkan FSRS:
+                <span className="text-moss-800 font-mono text-[11px] mx-auto flex items-center gap-1">
+                  <Keyboard className="w-3 h-3 text-moss-700" />
+                  Tekan angka 1-4 atau pilih tingkat kemudahan di bawah:
                 </span>
               )}
             </div>
@@ -280,99 +298,78 @@ export const FlashcardsView: React.FC<FlashcardsViewProps> = ({
 
           {/* FSRS Rating Buttons (Shown on Reveal) */}
           {isRevealed && (
-            <div className="space-y-2 animate-fadeIn">
+            <div className="space-y-2 animate-fadeUp">
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
                 <button
                   onClick={() => handleRate(1)}
-                  className="p-3 rounded bg-paper-100 hover:bg-terracotta-100 border border-paper-300 text-center transition"
+                  className="p-3 rounded bg-paper-100 hover:bg-terracotta-100 border border-paper-300 text-center transition group active:scale-98"
                 >
-                  <span className="block font-medium text-terracotta-900 text-xs sm:text-sm">Ulangi</span>
-                  <span className="text-[10px] text-ink-500 font-mono">Besok (1d)</span>
+                  <span className="block font-medium text-terracotta-900 text-xs sm:text-sm">[1] Ulangi</span>
+                  <span className="text-[10px] text-ink-500 font-mono">Besok (1 hari)</span>
                 </button>
                 <button
                   onClick={() => handleRate(2)}
-                  className="p-3 rounded bg-paper-100 hover:bg-amber-100 border border-paper-300 text-center transition"
+                  className="p-3 rounded bg-paper-100 hover:bg-amber-100 border border-paper-300 text-center transition group active:scale-98"
                 >
-                  <span className="block font-medium text-amber-900 text-xs sm:text-sm">Sulit</span>
+                  <span className="block font-medium text-amber-900 text-xs sm:text-sm">[2] Sulit</span>
                   <span className="text-[10px] text-ink-500 font-mono">2 hari lagi</span>
                 </button>
                 <button
                   onClick={() => handleRate(3)}
-                  className="p-3 rounded bg-moss-50 hover:bg-moss-100 border border-moss-300 text-center transition"
+                  className="p-3 rounded bg-paper-100 hover:bg-moss-100 border border-paper-300 text-center transition group active:scale-98"
                 >
-                  <span className="block font-medium text-moss-900 text-xs sm:text-sm font-bold">Paham</span>
-                  <span className="text-[10px] text-moss-700 font-mono font-semibold">4 hari lagi</span>
+                  <span className="block font-medium text-moss-900 text-xs sm:text-sm">[3] Paham</span>
+                  <span className="text-[10px] text-moss-700 font-mono">4 hari lagi</span>
                 </button>
                 <button
                   onClick={() => handleRate(4)}
-                  className="p-3 rounded bg-paper-100 hover:bg-moss-100 border border-paper-300 text-center transition"
+                  className="p-3 rounded bg-paper-100 hover:bg-moss-200 border border-paper-300 text-center transition group active:scale-98"
                 >
-                  <span className="block font-medium text-moss-900 text-xs sm:text-sm">Sangat Mudah</span>
-                  <span className="text-[10px] text-ink-500 font-mono">7 hari lagi</span>
+                  <span className="block font-medium text-moss-950 text-xs sm:text-sm">[4] Sangat Mudah</span>
+                  <span className="text-[10px] text-moss-800 font-mono">1 pekan lagi</span>
                 </button>
               </div>
             </div>
           )}
 
         </div>
-      ) : sessionCompleted ? (
-        /* ── SESSION COMPLETED SUMMARY ────────────────────────── */
-        <div className="paper-sheet p-8 sm:p-10 text-center space-y-5 animate-fadeIn">
-          <div className="w-12 h-12 rounded-full bg-moss-100 text-moss-900 flex items-center justify-center mx-auto border border-moss-300">
-            <CheckCircle2 className="w-6 h-6 text-moss-800" />
+      ) : (
+        /* ── SESSION COMPLETED CELEBRATION ───────────────────── */
+        <div className="paper-sheet p-8 sm:p-12 text-center space-y-5 border-2 border-moss-700 animate-scaleUp">
+          <div className="w-16 h-16 rounded-full bg-moss-100 text-moss-900 flex items-center justify-center mx-auto">
+            <Award className="w-8 h-8" />
           </div>
-          
-          <div>
-            <h2 className="text-2xl font-serif text-ink-950 font-medium">
-              Sesi Flashcard Selesai!
+
+          <div className="space-y-1">
+            <span className="text-[10px] font-mono uppercase tracking-widest text-moss-800 font-semibold block">
+              Sesi Review Selesai
+            </span>
+            <h2 className="text-2xl sm:text-3xl font-serif font-medium text-ink-950">
+              {reviewedInSession} Kartu Berhasil Diulang!
             </h2>
-            <p className="text-sm text-ink-600 font-serif mt-1">
-              Kamu telah mereview {reviewedInSession} kartu. Jadwal memori FSRS telah diperbarui secara otomatis.
+            <p className="text-xs sm:text-sm text-ink-600 font-serif max-w-md mx-auto mt-1">
+              Algoritma FSRS telah memperbarui stabilitas memori setiap konsep ke jadwal yang optimal.
             </p>
           </div>
 
-          {lastRatedInterval && (
-            <div className="p-3 bg-paper-100 rounded border border-paper-200 text-xs font-mono text-ink-700 max-w-xs mx-auto">
-              Jadwal Review Berikutnya: {lastRatedInterval}
-            </div>
-          )}
-
-          <div className="flex flex-wrap items-center justify-center gap-3 pt-2">
+          <div className="pt-4 flex justify-center gap-3">
             <button
               onClick={handleRestart}
               className="btn-secondary text-xs py-2 px-4 flex items-center gap-1.5"
             >
               <RotateCcw className="w-3.5 h-3.5" />
-              Review Ulang
+              Ulangi Sesi Ini
             </button>
-
-            {onStartLearnConcept && currentCard && (
+            {onStartLearnConcept && currentConcept && (
               <button
-                onClick={() => onStartLearnConcept(currentCard.conceptId)}
+                onClick={() => onStartLearnConcept(currentConcept.id)}
                 className="btn-primary text-xs py-2 px-4 shadow-subtle flex items-center gap-1.5"
               >
-                <span>Buka Modul Belajar</span>
+                <span>Lanjut Belajar Materi</span>
                 <ArrowRight className="w-3.5 h-3.5" />
               </button>
             )}
           </div>
-        </div>
-      ) : (
-        /* ── EMPTY STATE ─────────────────────────────────────── */
-        <div className="paper-sheet p-10 text-center space-y-4 font-serif text-ink-600">
-          <Layers className="w-10 h-10 text-ink-400 mx-auto" />
-          <div>
-            <h3 className="text-lg text-ink-900 font-medium">Tidak ada kartu pada filter ini.</h3>
-            <p className="text-xs text-ink-500 mt-1">
-              Semua review jatuh tempo sudah selesai untuk saat ini.
-            </p>
-          </div>
-          <button
-            onClick={() => setSelectedMode('TOPIC')}
-            className="btn-secondary text-xs py-2 px-4"
-          >
-            Lihat Semua Kartu Materi
-          </button>
         </div>
       )}
 

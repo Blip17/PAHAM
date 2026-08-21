@@ -62,8 +62,10 @@ export const GuardianDashboard: React.FC = () => {
     // Listen for Ctrl+Shift+Q shortcut
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.ctrlKey && e.shiftKey && (e.key === 'Q' || e.key === 'q')) {
-        if (!isOpen) runAudit();
-        setIsOpen(prev => !prev);
+        setIsOpen(prev => {
+          if (!prev) runAudit();
+          return !prev;
+        });
       }
     };
     window.addEventListener('keydown', handleKeyDown);
@@ -71,7 +73,7 @@ export const GuardianDashboard: React.FC = () => {
       window.removeEventListener('keydown', handleKeyDown);
       window.removeEventListener('open-guardian-dashboard', handleCustomOpen);
     };
-  }, [isOpen]);
+  }, []);
 
   const filteredFindings = report?.findings.filter(f => {
     if (activeCategory === 'ALL') return true;

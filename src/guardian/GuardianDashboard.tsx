@@ -26,6 +26,9 @@ import { Badge } from '../components/ui/Badge';
 import { Button } from '../components/ui/Button';
 
 export const GuardianDashboard: React.FC = () => {
+  const isDev = import.meta.env.DEV || (typeof window !== 'undefined' && window.localStorage.getItem('paham_dev_mode') === 'true');
+  if (!isDev) return null;
+
   const [isOpen, setIsOpen] = useState<boolean>(false);
   const [report, setReport] = useState<GuardianReport | null>(null);
   const [isRunning, setIsRunning] = useState<boolean>(false);
@@ -43,20 +46,23 @@ export const GuardianDashboard: React.FC = () => {
   };
 
   useEffect(() => {
-    runAudit();
-
     // Check if auto-open requested via URL or session
-    if (typeof window !== 'undefined' && (window.location.search.includes('guardian') || window.location.hash.includes('guardian'))) {
+    if (typeof window !== 'undefined' && (window.location.search.includes('guardian=true') || window.location.hash.includes('guardian'))) {
+      runAudit();
       setIsOpen(true);
     }
 
     // Listen for custom open event
-    const handleCustomOpen = () => setIsOpen(true);
+    const handleCustomOpen = () => {
+      runAudit();
+      setIsOpen(true);
+    };
     window.addEventListener('open-guardian-dashboard', handleCustomOpen);
 
     // Listen for Ctrl+Shift+Q shortcut
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.ctrlKey && e.shiftKey && (e.key === 'Q' || e.key === 'q')) {
+        if (!isOpen) runAudit();
         setIsOpen(prev => !prev);
       }
     };
@@ -65,7 +71,7 @@ export const GuardianDashboard: React.FC = () => {
       window.removeEventListener('keydown', handleKeyDown);
       window.removeEventListener('open-guardian-dashboard', handleCustomOpen);
     };
-  }, []);
+  }, [isOpen]);
 
   const filteredFindings = report?.findings.filter(f => {
     if (activeCategory === 'ALL') return true;
@@ -73,34 +79,14 @@ export const GuardianDashboard: React.FC = () => {
   }) || [];
 
   const getScoreColor = (score: number) => {
-    if (score >= 90) return 'text-moss-800 bg-moss-50 border-moss-300';
-    if (score >= 70) return 'text-amber-800 bg-amber-50 border-amber-300';
-    return 'text-terracotta-800 bg-terracotta-50 border-terracotta-300';
+    if (score >= 90) return 'text-moss-800 bg-moss-50 border-moss-200';
+    if (score >= 70) return 'text-amber-800 bg-amber-50 border-amber-200';
+    return 'text-terracotta-800 bg-terracotta-50 border-terracotta-200';
   };
 
   return (
     <>
-      {/* Floating Trigger in Bottom-Left Corner */}
-      <div className="fixed bottom-6 left-6 z-50 select-none">
-        <button
-          type="button"
-          onClick={() => setIsOpen(prev => !prev)}
-          className="group flex items-center gap-2 p-2 px-3 rounded-full bg-ink-950 text-paper-50 border border-ink-800 shadow-modal hover:shadow-elevated hover:scale-105 active:scale-95 transition-all text-xs font-mono"
-          title="Buka Paham Quality Guardian (Ctrl+Shift+Q)"
-        >
-          <ShieldCheck className="w-4 h-4 text-moss-400 group-hover:rotate-12 transition-transform" />
-          <span className="font-bold">QA Guardian</span>
-          {report && (
-            <span className={`px-1.5 py-0.2 rounded text-[10px] font-bold ${
-              report.failCount > 0 ? 'bg-terracotta-600 text-white' : 'bg-moss-700 text-white'
-            }`}>
-              {report.score}%
-            </span>
-          )}
-        </button>
-      </div>
-
-      {/* Expanded Modal Dashboard */}
+      {/* Expanded Modal Dashboard (only visible when explicitly opened via shortcut or dev action) */}
       {isOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-ink-950/60 backdrop-blur-sm animate-fadeIn">
           <div className="w-full max-w-4xl bg-paper-50 border border-paper-300 rounded-xl shadow-modal flex flex-col max-h-[88vh] overflow-hidden text-ink-950">

@@ -52,13 +52,30 @@ export const DevCockpit: React.FC<DevCockpitProps> = ({
   onImpersonateUser,
   activeProfile 
 }) => {
+  const isDevEnv = import.meta.env.DEV;
   const [activeTab, setActiveTab] = useState<DevCockpitTab>('overview');
   const [isPaletteOpen, setIsPaletteOpen] = useState<boolean>(false);
-  const [isAuthorized, setIsAuthorized] = useState<boolean>(true);
+  const [isAuthorized, setIsAuthorized] = useState<boolean>(() => {
+    if (isDevEnv) return true;
+    return typeof window !== 'undefined' && window.sessionStorage.getItem('paham_dev_auth') === 'paham-dev-active';
+  });
   const [authPin, setAuthPin] = useState<string>('');
+  const [authError, setAuthError] = useState<string>('');
+
+  const handleAuthorize = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (authPin.trim() === 'paham-dev-2026' || authPin.trim() === 'dev') {
+      window.sessionStorage.setItem('paham_dev_auth', 'paham-dev-active');
+      setIsAuthorized(true);
+      setAuthError('');
+    } else {
+      setAuthError('Kunci otorisasi pengembang salah. Akses ditolak.');
+    }
+  };
 
   // Listen for Ctrl+K shortcut
   useEffect(() => {
+    if (!isAuthorized) return;
     const handleKeyDown = (e: KeyboardEvent) => {
       if ((e.ctrlKey || e.metaKey) && (e.key === 'k' || e.key === 'K')) {
         e.preventDefault();
@@ -67,7 +84,57 @@ export const DevCockpit: React.FC<DevCockpitProps> = ({
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, []);
+  }, [isAuthorized]);
+
+  if (!isAuthorized) {
+    return (
+      <div className="min-h-screen bg-zinc-950 text-zinc-100 flex flex-col items-center justify-center p-4 font-mono">
+        <div className="w-full max-w-md bg-zinc-900 border border-zinc-800 rounded-xl p-6 shadow-2xl space-y-5">
+          <div className="flex items-center gap-3 border-b border-zinc-800 pb-4">
+            <div className="w-9 h-9 rounded-lg bg-rose-950/80 border border-rose-800 flex items-center justify-center text-rose-400">
+              <Lock className="w-5 h-5" />
+            </div>
+            <div>
+              <h1 className="text-sm font-bold text-zinc-100 uppercase tracking-wider">PAHAM Developer Access</h1>
+              <p className="text-xs text-zinc-500">Area terproteksi khusus tim pengembang PAHAM.</p>
+            </div>
+          </div>
+
+          <form onSubmit={handleAuthorize} className="space-y-4">
+            <div className="space-y-1.5">
+              <label className="text-xs text-zinc-400">Masukkan Passcode Developer:</label>
+              <input
+                type="password"
+                autoFocus
+                placeholder="Developer Passcode..."
+                value={authPin}
+                onChange={e => setAuthPin(e.target.value)}
+                className="w-full px-3 py-2 bg-zinc-950 border border-zinc-800 rounded-lg text-xs text-zinc-100 focus:outline-none focus:border-rose-500"
+              />
+              {authError && <p className="text-[11px] text-rose-400">{authError}</p>}
+            </div>
+
+            <div className="flex items-center justify-between gap-3 pt-2">
+              <button
+                type="button"
+                onClick={onExit}
+                className="px-3 py-2 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-xs font-bold transition flex items-center gap-1.5"
+              >
+                <ArrowLeft className="w-3.5 h-3.5" />
+                Kembali ke Aplikasi Siswa
+              </button>
+              <button
+                type="submit"
+                className="px-4 py-2 rounded-lg bg-rose-700 hover:bg-rose-600 text-white text-xs font-bold shadow transition"
+              >
+                Buka Cockpit
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
+    );
+  }
 
   const navGroups: {
     groupName: string;

@@ -100,19 +100,24 @@ export function App() {
 
     // Listen for hash & route changes
     const handleLocationCheck = () => {
+      const isDevEnv = import.meta.env.DEV || (typeof window !== 'undefined' && window.sessionStorage.getItem('paham_dev_auth') === 'paham-dev-active');
       if (
         window.location.pathname === '/dev' || 
         window.location.hash === '#dev' || 
         window.location.search.includes('view=dev')
       ) {
-        setAppState('dev');
+        if (isDevEnv || window.location.hash === '#dev' || window.location.pathname === '/dev') {
+          setAppState('dev');
+        }
       }
     };
     window.addEventListener('hashchange', handleLocationCheck);
     window.addEventListener('popstate', handleLocationCheck);
 
-    // Global shortcut Ctrl+Shift+D for Dev Cockpit
+    // Dev shortcut Ctrl+Shift+D (only available in development or authorized sessions)
     const handleDevShortcut = (e: KeyboardEvent) => {
+      const isDevEnv = import.meta.env.DEV || (typeof window !== 'undefined' && window.sessionStorage.getItem('paham_dev_auth') === 'paham-dev-active');
+      if (!isDevEnv) return;
       if (e.ctrlKey && e.shiftKey && (e.key === 'D' || e.key === 'd')) {
         setAppState(prev => prev === 'dev' ? (userProfile ? 'app' : 'entry') : 'dev');
       }
@@ -414,8 +419,8 @@ export function App() {
               }}
             />
           )}
-          {/* Development-Only PAHAM Quality Guardian */}
-          <GuardianDashboard />
+          {/* Development-Only PAHAM Quality Guardian (strictly hidden in production) */}
+          {import.meta.env.DEV && <GuardianDashboard />}
 
           <Analytics />
         </ErrorBoundary>

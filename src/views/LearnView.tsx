@@ -27,6 +27,10 @@ import { Concept, Subject, Chapter, StudentConceptState, FSRSRating, StudyAssist
 import { ai, AnswerAnalysisResult } from '../services/ai/aiProvider';
 import { fsrs } from '../core/fsrsEngine';
 import { StudyAssistantDrawer } from '../components/study/StudyAssistantDrawer';
+import { PahamMascot, MascotState } from '../components/mascot/PahamMascot';
+import { Button } from '../components/ui/Button';
+import { Badge } from '../components/ui/Badge';
+import { Card } from '../components/ui/Card';
 
 interface LearnViewProps {
   initialConceptId?: string;
@@ -198,6 +202,27 @@ export const LearnView: React.FC<LearnViewProps> = ({
         </div>
 
         <div className="flex items-center gap-3 self-stretch sm:self-auto justify-between sm:justify-end">
+          <div className="flex items-center gap-2">
+            <PahamMascot 
+              size="sm" 
+              state={
+                currentStep === 1 ? 'thinking' :
+                currentStep === 2 ? 'curious' :
+                currentStep === 3 ? 'encouraging' :
+                currentStep === 4 ? 'recommending' :
+                currentStep === 5 ? 'thinking' : 'celebrating'
+              }
+              bubbleText={
+                currentStep === 1 ? 'Ingat tanpa catatan ya!' :
+                currentStep === 2 ? 'Fokus ke kata kunci.' :
+                currentStep === 3 ? 'Gunakan gayamu sendiri!' :
+                currentStep === 4 ? 'Uji pemahamanmu.' :
+                currentStep === 5 ? 'Kalibrasi keyakinanmu.' : 'Sesi tuntas!'
+              }
+              bubblePosition="left"
+            />
+          </div>
+
           <div className="flex items-center gap-1.5 font-mono text-xs text-ink-700 bg-paper-100 px-3 py-1.5 rounded border border-paper-200">
             <Clock className="w-3.5 h-3.5 text-moss-700" />
             <span>{formatTimer(sessionSecondsElapsed)}</span>

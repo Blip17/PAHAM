@@ -23,6 +23,10 @@ import { ai } from '../services/ai/aiProvider';
 import { StudyAssistantDrawer } from '../components/study/StudyAssistantDrawer';
 import { adaptiveQuestionEngine, AdaptiveSessionState } from '../learning/engine/adaptiveQuestionEngine';
 import { flashcardService } from '../learning/flashcards/flashcardService';
+import { PahamMascot } from '../components/mascot/PahamMascot';
+import { Button } from '../components/ui/Button';
+import { Badge } from '../components/ui/Badge';
+import { Card } from '../components/ui/Card';
 
 interface QuizViewProps {
   initialConceptId?: string;
@@ -304,11 +308,14 @@ export const QuizView: React.FC<QuizViewProps> = ({
           </button>
         </div>
 
-        {/* Adaptive Microcopy Feedback Banner */}
-        {quizMode === 'adaptive' && adaptiveMicrocopy && !quizFinished && (
-          <div className="p-2.5 bg-paper-100 rounded border border-moss-200 text-[11px] font-mono text-moss-900 flex items-center gap-2">
-            <span className="w-2 h-2 rounded-full bg-moss-600 animate-pulse shrink-0" />
-            <span>{adaptiveMicrocopy}</span>
+        {/* Adaptive Microcopy Feedback Banner with Mascot */}
+        {quizMode === 'adaptive' && !quizFinished && (
+          <div className="p-3 bg-paper-100 rounded border border-moss-200 text-xs font-mono text-moss-900 flex items-center justify-between gap-3">
+            <div className="flex items-center gap-2">
+              <span className="w-2 h-2 rounded-full bg-moss-600 animate-pulse shrink-0" />
+              <span>{adaptiveMicrocopy || 'Menyesuaikan tingkat kesulitan soal secara adaptif...'}</span>
+            </div>
+            <PahamMascot size="xs" state={isAnswered ? (userScore > 0 ? 'success' : 'encouraging') : 'thinking'} />
           </div>
         )}
       </div>
@@ -316,7 +323,15 @@ export const QuizView: React.FC<QuizViewProps> = ({
       {/* QUIZ FINISHED REPORT */}
       {quizFinished ? (
         <div className="paper-sheet p-8 space-y-6 text-center">
-          <span className="text-xs font-mono uppercase tracking-wider text-moss-800 font-semibold block">
+          <PahamMascot 
+            size="lg" 
+            state={userScore >= Math.floor(activeQuestions.length * 0.7) ? 'celebrating' : 'encouraging'} 
+            bubbleText={userScore >= Math.floor(activeQuestions.length * 0.7) ? 'Penguasaan luar biasa!' : 'Latihan yang bagus! Terus asah ya.'}
+            bubblePosition="top"
+            className="mx-auto"
+          />
+
+          <span className="text-xs font-mono uppercase tracking-wider text-moss-800 font-semibold block pt-2">
             Latihan Selesai
           </span>
           
@@ -360,19 +375,21 @@ export const QuizView: React.FC<QuizViewProps> = ({
           )}
 
           <div className="flex items-center justify-center gap-3 pt-2">
-            <button
+            <Button
               onClick={() => filterQuestionsByMode(quizMode, selectedConceptId, allQuestions, concepts, studentStates)}
-              className="btn-secondary text-xs py-2 px-4"
+              variant="secondary"
+              size="sm"
+              leftIcon={<RotateCcw className="w-3.5 h-3.5" />}
             >
-              <RotateCcw className="w-3.5 h-3.5" />
               Ulangi Sesi Ini
-            </button>
-            <button
+            </Button>
+            <Button
               onClick={onFinishQuiz}
-              className="btn-primary text-xs py-2 px-4 shadow-subtle"
+              variant="primary"
+              size="sm"
             >
               Selesai
-            </button>
+            </Button>
           </div>
         </div>
       ) : currentQ ? (

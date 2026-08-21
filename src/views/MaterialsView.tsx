@@ -17,6 +17,11 @@ import {
 } from 'lucide-react';
 import { db } from '../core/db';
 import { Material, Concept, Subject, Chapter, MaterialBlock } from '../core/types';
+import { PahamMascot } from '../components/mascot/PahamMascot';
+import { Button } from '../components/ui/Button';
+import { Badge } from '../components/ui/Badge';
+import { Card } from '../components/ui/Card';
+import { Modal } from '../components/ui/Modal';
 
 interface MaterialsViewProps {
   onStartStudyConcept: (conceptId: string) => void;

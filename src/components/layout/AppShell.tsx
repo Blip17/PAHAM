@@ -22,6 +22,7 @@ import {
 import { db } from '../../core/db';
 import { UserProfile, DailyStudyPlan, Concept } from '../../core/types';
 import { studyPlanner } from '../../core/studyPlannerEngine';
+import { PahamMascot } from '../mascot/PahamMascot';
 
 interface AppShellProps {
   userProfile: UserProfile;
@@ -100,12 +101,10 @@ export const AppShell: React.FC<AppShellProps> = ({
       {/* ── DESKTOP LEFT RAIL NAVIGATION ─────────────────────────────────── */}
       <aside className="hidden md:flex flex-col w-64 border-r border-paper-300 bg-paper-50 shrink-0 sticky top-0 h-screen justify-between p-6 overflow-y-auto">
         <div>
-          {/* Logo Brandmark */}
+          {/* Logo Brandmark with Paham Mascot */}
           <div className="mb-8">
-            <div className="flex items-center gap-2.5">
-              <div className="w-8 h-8 rounded bg-moss-900 text-paper-50 flex items-center justify-center font-serif font-bold text-lg tracking-tight">
-                P
-              </div>
+            <div className="flex items-center gap-3">
+              <PahamMascot size="sm" state="idle" className="shrink-0" />
               <div>
                 <span className="font-serif font-bold text-xl tracking-tight text-ink-950 block leading-none">
                   PAHAM
@@ -230,9 +229,7 @@ export const AppShell: React.FC<AppShellProps> = ({
       {/* ── MOBILE TOP HEADER ────────────────────────────────────────────── */}
       <header className="md:hidden flex items-center justify-between px-4 py-3 bg-paper-50 border-b border-paper-300 sticky top-0 z-30">
         <div className="flex items-center gap-2">
-          <div className="w-7 h-7 rounded bg-moss-900 text-paper-50 flex items-center justify-center font-serif font-bold text-sm">
-            P
-          </div>
+          <PahamMascot size="xs" state="idle" className="shrink-0" />
           <span className="font-serif font-bold text-base tracking-tight text-ink-950">
             PAHAM
           </span>

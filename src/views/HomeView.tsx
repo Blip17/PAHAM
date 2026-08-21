@@ -41,6 +41,10 @@ import { learningMethodSelector } from '../learning/engine/learningMethodSelecto
 import { flashcardService } from '../learning/flashcards/flashcardService';
 import { goalPlanner } from '../learning/goals/goalPlanner';
 import { scheduleService } from '../learning/schedule/scheduleService';
+import { PahamMascot } from '../components/mascot/PahamMascot';
+import { Button } from '../components/ui/Button';
+import { Badge } from '../components/ui/Badge';
+import { Card } from '../components/ui/Card';
 
 interface HomeViewProps {
   userProfile: UserProfile;
@@ -76,6 +80,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [completedTaskIds, setCompletedTaskIds] = useState<Set<string>>(new Set());
   const [showRescueBanner, setShowRescueBanner] = useState<boolean>(false);
+  const [isWhyExpanded, setIsWhyExpanded] = useState<boolean>(false);
 
   useEffect(() => {
     async function loadData() {
@@ -227,15 +232,26 @@ export const HomeView: React.FC<HomeViewProps> = ({
           {primaryTask && primaryConcept ? (
             <div className="paper-sheet p-6 sm:p-8 border-2 border-moss-800/80 shadow-md relative overflow-hidden space-y-6 bg-paper-50">
               
-              {/* Layer 2 Header: Subject & Mode Badge */}
+              {/* Layer 2 Header: Subject, Mode Badge & Mascot */}
               <div className="flex items-center justify-between text-xs font-mono text-ink-500 border-b border-paper-200 pb-3">
-                <span className="uppercase tracking-wider font-semibold text-moss-900 flex items-center gap-1.5">
-                  <Sparkles className="w-3.5 h-3.5 text-moss-700" />
-                  YOUR NEXT FOCUS
-                </span>
-                <span className="bg-moss-100 text-moss-900 px-2 py-0.5 rounded font-medium text-[11px]">
-                  {primarySubject?.name || 'Mata Pelajaran'}
-                </span>
+                <div className="flex items-center gap-2">
+                  <span className="uppercase tracking-wider font-semibold text-moss-900 flex items-center gap-1.5">
+                    <Sparkles className="w-3.5 h-3.5 text-moss-700" />
+                    YOUR NEXT FOCUS
+                  </span>
+                  <Badge variant="moss" size="sm">
+                    {primarySubject?.name || 'Mata Pelajaran'}
+                  </Badge>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <PahamMascot 
+                    size="sm" 
+                    state="recommending" 
+                    bubbleText={`Sesi ${primaryTask.estimatedMinutes}m siap!`}
+                    bubblePosition="left"
+                  />
+                </div>
               </div>
 
               {/* Concept Title & Big Typographic Duration */}
@@ -257,14 +273,42 @@ export const HomeView: React.FC<HomeViewProps> = ({
                 </div>
               </div>
 
-              {/* Transparent "Why This Task?" Rationale */}
-              <div className="p-3.5 bg-paper-100 rounded border border-paper-300 space-y-1.5">
-                <span className="text-[10px] font-mono uppercase tracking-wider text-moss-800 font-semibold block">
-                  Kenapa tugas ini dipilih?
-                </span>
-                <p className="text-xs text-ink-700 font-serif leading-relaxed">
-                  "{recommendation?.reason || primaryTask.reason}"
-                </p>
+              {/* Interactive Transparent "Why This Task?" Rationale Accordion */}
+              <div className="bg-paper-100 rounded border border-paper-300 overflow-hidden transition-all duration-200">
+                <button
+                  type="button"
+                  onClick={() => setIsWhyExpanded(prev => !prev)}
+                  className="w-full p-3.5 flex items-center justify-between text-left hover:bg-paper-150 transition cursor-pointer"
+                >
+                  <span className="text-[11px] font-mono uppercase tracking-wider text-moss-800 font-semibold flex items-center gap-1.5">
+                    <span>Kenapa tugas ini dipilih?</span>
+                    <span className="text-[10px] text-ink-400 font-normal">(klik untuk rincian)</span>
+                  </span>
+                  <ChevronRight className={`w-3.5 h-3.5 text-ink-500 transition-transform duration-200 ${isWhyExpanded ? 'rotate-90' : ''}`} />
+                </button>
+
+                <div className="px-3.5 pb-3.5 space-y-2">
+                  <p className="text-xs text-ink-700 font-serif leading-relaxed">
+                    "{recommendation?.reason || primaryTask.reason}"
+                  </p>
+
+                  {isWhyExpanded && (
+                    <div className="pt-2.5 border-t border-paper-200 grid grid-cols-1 sm:grid-cols-3 gap-2 text-[11px] font-mono text-ink-600 animate-fadeIn">
+                      <div className="p-2 rounded bg-paper-50 border border-paper-200">
+                        <span className="font-semibold text-moss-900 block">1. Retensi Memori</span>
+                        <span>FSRS review jatuh tempo</span>
+                      </div>
+                      <div className="p-2 rounded bg-paper-50 border border-paper-200">
+                        <span className="font-semibold text-moss-900 block">2. Analisis Soal</span>
+                        <span>{recentMistakes.length > 0 ? `${recentMistakes.length} miskonsepsi aktif` : 'Penguatan aplikasi'}</span>
+                      </div>
+                      <div className="p-2 rounded bg-paper-50 border border-paper-200">
+                        <span className="font-semibold text-moss-900 block">3. Target Ulangan</span>
+                        <span>{closestExam ? `${closestExam.daysRemaining} hari lagi` : 'Kurikulum aktif'}</span>
+                      </div>
+                    </div>
+                  )}
+                </div>
               </div>
 
               {/* ── LAYER 3: EXPECTED OUTCOME (Honest Objectives) ── */}
@@ -290,39 +334,45 @@ export const HomeView: React.FC<HomeViewProps> = ({
 
               {/* Dominant Primary Action Button */}
               <div className="flex flex-wrap items-center justify-between gap-3 pt-2">
-                <button
+                <Button
                   onClick={() => onStartStudy(primaryConcept.id)}
-                  className="btn-primary text-sm py-3 px-6 shadow-md flex items-center gap-2 bg-moss-900 hover:bg-moss-950 text-paper-50 w-full sm:w-auto justify-center"
+                  size="lg"
+                  variant="primary"
+                  rightIcon={<ArrowRight className="w-4 h-4" />}
+                  className="w-full sm:w-auto"
                 >
-                  <span>MULAI SEKARANG</span>
-                  <ArrowRight className="w-4 h-4" />
-                </button>
+                  MULAI SEKARANG
+                </Button>
 
                 {onOpenFlashcards && (
-                  <button
+                  <Button
                     onClick={onOpenFlashcards}
-                    className="btn-ghost text-xs py-2 px-3 text-ink-600 hover:text-ink-900"
+                    size="sm"
+                    variant="ghost"
+                    rightIcon={<ArrowRight className="w-3.5 h-3.5" />}
                   >
-                    Buka Kartu Flashcard →
-                  </button>
+                    Buka Kartu Flashcard
+                  </Button>
                 )}
               </div>
 
             </div>
           ) : (
-            <div className="paper-sheet p-8 text-center space-y-4 font-serif">
-              <FileText className="w-10 h-10 text-ink-400 mx-auto" />
-              <h3 className="text-lg text-ink-900 font-medium">Belum ada materi aktif.</h3>
+            <div className="paper-sheet p-8 sm:p-12 text-center space-y-4 font-serif">
+              <PahamMascot size="lg" state="curious" bubbleText="Catatanmu belum diunggah!" bubblePosition="top" className="mx-auto" />
+              <h3 className="text-lg sm:text-xl text-ink-900 font-medium pt-2">Belum ada materi belajar aktif.</h3>
               <p className="text-xs text-ink-500 max-w-sm mx-auto">
-                Foto catatan guru atau upload modul pelajaranmu agar PAHAM dapat menyiapkan rencana belajar.
+                Foto catatan guru atau upload lembar kerja agar PAHAM dapat menyiapkan rencana belajar personalmu.
               </p>
-              <button
+              <Button
                 onClick={onOpenScan}
-                className="btn-primary text-xs py-2 px-4 shadow-subtle inline-flex items-center gap-1.5"
+                size="md"
+                variant="primary"
+                rightIcon={<ArrowRight className="w-3.5 h-3.5" />}
+                className="inline-flex"
               >
-                <span>Upload Catatan Pertama</span>
-                <ArrowRight className="w-3.5 h-3.5" />
-              </button>
+                Upload Catatan Pertama
+              </Button>
             </div>
           )}
 

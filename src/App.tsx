@@ -18,6 +18,7 @@ import { StudyTimerModal } from './views/StudyTimerModal';
 import { ToastProvider } from './components/ui/Toast';
 import { ErrorBoundary } from './components/ui/ErrorBoundary';
 import { MascotCompanionCorner } from './components/companion/MascotCompanionCorner';
+import { TopLiveAnnouncementBubble } from './components/companion/TopLiveAnnouncementBubble';
 import { GuardianDashboard } from './guardian/GuardianDashboard';
 import { DevCockpit } from './dev/DevCockpit';
 // Entry experience
@@ -388,6 +389,9 @@ export function App() {
               />
             )}
           </AppShell>
+
+          {/* Live Top Surprise Announcement / Chat Bubble */}
+          <TopLiveAnnouncementBubble />
 
           {/* Subtle Floating Learning Companion */}
           <MascotCompanionCorner

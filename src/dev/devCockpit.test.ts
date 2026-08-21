@@ -7,6 +7,7 @@ import { userSimulatorService, SYNTHETIC_PRESETS } from './services/userSimulato
 import { devAuditLogger } from './services/devAuditLogger';
 import { devErrorTracker } from './services/devErrorTracker';
 import { devAiLogger } from './services/devAiLogger';
+import { liveRemoteService } from './services/liveRemoteService';
 import { db } from '../core/db';
 
 describe('PAHAM Internal Developer Cockpit Suite', () => {
@@ -119,5 +120,33 @@ describe('PAHAM Internal Developer Cockpit Suite', () => {
     const logs = devAiLogger.getLogs();
     expect(logs.length).toBe(initialCount + 1);
     expect(logs[0].latencyMs).toBe(15);
+  });
+
+  // ── 7. Live Remote & Web Broadcast Service ────────────────────────────────
+  it('broadcasts live mascot overrides and triggers subscribers with custom chat', () => {
+    let receivedPayload: any = null;
+    const unsub = liveRemoteService.subscribe(payload => {
+      receivedPayload = payload;
+    });
+
+    liveRemoteService.broadcast({
+      expression: 'sleeping',
+      message: 'Zzz... Piko lagi tidur nih...',
+      displayMode: 'BOTH',
+      durationSeconds: 10,
+      playSound: true,
+      senderName: 'Lead Dev',
+    });
+
+    expect(receivedPayload).toBeDefined();
+    expect(receivedPayload?.expression).toBe('sleeping');
+    expect(receivedPayload?.message).toContain('Piko lagi tidur');
+    expect(receivedPayload?.displayMode).toBe('BOTH');
+
+    // Clear broadcast
+    liveRemoteService.clearOverride();
+    expect(receivedPayload).toBeNull();
+
+    unsub();
   });
 });

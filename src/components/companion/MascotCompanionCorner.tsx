@@ -14,6 +14,7 @@ import {
 } from 'lucide-react';
 import { CompanionRecommendation, CompanionNotificationPreferences } from '../../core/types';
 import { companionService, DEFAULT_COMPANION_PREFERENCES } from '../../learning/companion/companionService';
+import { liveRemoteService, LiveBroadcastPayload } from '../../dev/services/liveRemoteService';
 import { PahamMascot } from '../mascot/PahamMascot';
 import { RecommendationCard } from './RecommendationCard';
 import { CompanionPreferencesModal } from './CompanionPreferencesModal';
@@ -40,6 +41,15 @@ export const MascotCompanionCorner: React.FC<MascotCompanionCornerProps> = ({
   const [preferences, setPreferences] = useState<CompanionNotificationPreferences>(DEFAULT_COMPANION_PREFERENCES);
   const [isPreferencesOpen, setIsPreferencesOpen] = useState<boolean>(false);
   const [isLoading, setIsLoading] = useState<boolean>(false);
+  const [liveOverride, setLiveOverride] = useState<LiveBroadcastPayload | null>(liveRemoteService.getCurrentOverride());
+
+  // Listen to real-time developer broadcasts (e.g. Sleepy, Custom Chat, Celebration)
+  useEffect(() => {
+    const unsub = liveRemoteService.subscribe((payload) => {
+      setLiveOverride(payload);
+    });
+    return () => unsub();
+  }, []);
 
   // Load active recommendations and preferences
   const refreshCompanionData = async () => {
@@ -111,14 +121,40 @@ export const MascotCompanionCorner: React.FC<MascotCompanionCornerProps> = ({
     return null;
   }
 
-  // Determine mascot appearance for floating trigger
-  const mascotState = topRec ? topRec.mascotState : 'idle';
+  // Determine mascot appearance for floating trigger (live override takes precedence)
+  const mascotState = liveOverride ? liveOverride.expression : (topRec ? topRec.mascotState : 'idle');
   const hasUnread = recommendations.length > 0;
+  const showCornerBubble = liveOverride?.message && (liveOverride.displayMode === 'CORNER_BUBBLE' || liveOverride.displayMode === 'BOTH');
 
   return (
     <>
       <div className="fixed bottom-6 right-6 z-40 select-none">
         
+        {/* Floating Speech Bubble Attached to Piko (Live Surprise Chat) */}
+        {!isOpen && showCornerBubble && (
+          <div className="absolute bottom-full right-0 mb-3 w-64 p-3.5 rounded-2xl bg-paper-50 border-2 border-moss-800 shadow-modal text-ink-950 animate-bounceIn">
+            <div className="flex items-start justify-between gap-1.5 pb-1">
+              <span className="text-[10px] font-bold font-mono text-moss-800 uppercase">
+                {mascotState === 'sleeping' ? 'Piko (Lagi Tidur)' : 'Piko Menyapa'}
+              </span>
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  liveRemoteService.clearOverride();
+                }}
+                className="p-0.5 rounded text-ink-400 hover:text-ink-900"
+              >
+                <X className="w-3 h-3" />
+              </button>
+            </div>
+            <p className="font-serif text-xs font-semibold leading-snug text-ink-900">
+              "{liveOverride?.message}"
+            </p>
+            {/* Speech bubble pointer */}
+            <div className="absolute top-full right-6 w-3 h-3 -mt-1.5 rotate-45 bg-paper-50 border-r-2 border-b-2 border-moss-800" />
+          </div>
+        )}
+
         {/* ── EXPANDED COMPANION DRAWER / CARD ────────────────── */}
         {isOpen ? (
           <div className="w-80 sm:w-96 bg-paper-50 border border-paper-300 rounded-xl shadow-modal p-5 space-y-4 animate-scaleUp text-ink-900 relative">
@@ -132,7 +168,7 @@ export const MascotCompanionCorner: React.FC<MascotCompanionCornerProps> = ({
                     Piko · Teman Belajar
                   </span>
                   <span className="text-[10px] font-mono text-moss-800 font-medium">
-                    {recommendations.length > 0 ? `${recommendations.length} saran kontekstual aktif` : 'Semua rencana hari ini teratur'}
+                    {liveOverride ? `Mode Live Aktif: ${liveOverride.expression.toUpperCase()}` : (recommendations.length > 0 ? `${recommendations.length} saran kontekstual aktif` : 'Semua rencana hari ini teratur')}
                   </span>
                 </div>
               </div>
@@ -203,7 +239,12 @@ export const MascotCompanionCorner: React.FC<MascotCompanionCornerProps> = ({
           <button
             type="button"
             onClick={() => setIsOpen(true)}
-            className="group relative flex items-center gap-2.5 p-2 pr-3.5 rounded-full bg-paper-50 border-2 border-moss-800/80 shadow-modal hover:shadow-elevated hover:scale-105 active:scale-95 transition-all duration-200 cursor-pointer"
+            className={`group relative flex items-center gap-2.5 p-2 pr-3.5 rounded-full bg-paper-50 border-2 shadow-modal hover:shadow-elevated hover:scale-105 active:scale-95 transition-all duration-200 cursor-pointer ${
+              mascotState === 'sleeping' ? 'border-indigo-500' :
+              mascotState === 'celebrating' ? 'border-amber-500' :
+              mascotState === 'warning' ? 'border-rose-500' :
+              'border-moss-800/80'
+            }`}
             aria-label="Buka Teman Belajar Piko"
           >
             {/* Mascot Avatar */}
@@ -214,9 +255,11 @@ export const MascotCompanionCorner: React.FC<MascotCompanionCornerProps> = ({
             />
 
             <div className="text-left font-serif leading-tight pr-1">
-              <span className="text-xs font-semibold text-ink-950 block">Piko</span>
+              <span className="text-xs font-semibold text-ink-950 block">
+                {mascotState === 'sleeping' ? 'Piko (Zzz)' : 'Piko'}
+              </span>
               <span className="text-[10px] text-moss-800 font-mono">
-                {hasUnread ? `${recommendations.length} saran` : 'Siap bantu'}
+                {liveOverride ? 'Live Dev' : (hasUnread ? `${recommendations.length} saran` : 'Siap bantu')}
               </span>
             </div>
 

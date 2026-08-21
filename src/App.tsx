@@ -17,6 +17,7 @@ import { ScanFlowModal } from './views/ScanFlowModal';
 import { StudyTimerModal } from './views/StudyTimerModal';
 import { ToastProvider } from './components/ui/Toast';
 import { ErrorBoundary } from './components/ui/ErrorBoundary';
+import { MascotCompanionCorner } from './components/companion/MascotCompanionCorner';
 // Entry experience
 import { EntryView } from './entry/EntryView';
 import { AuthPanel } from './entry/AuthPanel';
@@ -315,6 +316,16 @@ export function App() {
               />
             )}
           </AppShell>
+
+          {/* Subtle Floating Learning Companion */}
+          <MascotCompanionCorner
+            currentTab={activeTab}
+            onStartStudy={handleStartStudy}
+            onOpenFlashcards={() => setActiveTab('flashcards')}
+            onOpenQuiz={handleOpenQuiz}
+            onOpenExam={(examId) => examId ? handleOpenExam(examId) : undefined}
+            onOpenMaterials={() => setActiveTab('materials')}
+          />
 
           <ScanFlowModal
             isOpen={isScanModalOpen}

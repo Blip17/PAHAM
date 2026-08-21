@@ -559,3 +559,74 @@ export interface NotificationPreference {
   permissionState: 'default' | 'granted' | 'denied' | 'unsupported';
 }
 
+// ── COMPANION RECOMMENDATION ENGINE TYPES ────────────────────────────────────
+
+export type RecommendationPriority = 'HIGH' | 'MEDIUM' | 'LOW';
+
+export type RecommendationActionType = 
+  | 'STUDY_CONCEPT'
+  | 'REVIEW_FLASHCARDS'
+  | 'TAKE_QUIZ'
+  | 'SIMULATE_EXAM'
+  | 'READ_MATERIAL'
+  | 'SET_GOAL'
+  | 'RESCUE_STUDY';
+
+export type RecommendationOutcome = 
+  | 'ACCEPTED'
+  | 'DISMISSED'
+  | 'SNOOZED'
+  | 'EXPIRED'
+  | 'COMPLETED';
+
+export type RecommendationSignalType =
+  | 'EXAM_PROXIMITY'
+  | 'FSRS_OVERDUE'
+  | 'REPEATED_MISTAKE'
+  | 'UNFINISHED_GOAL'
+  | 'UNSTUDIED_MATERIAL'
+  | 'STREAK_PRESERVATION'
+  | 'RETENTION_ANCHOR'
+  | 'DISCOVERY';
+
+export interface CompanionRecommendation {
+  id: string;
+  ruleId: string;
+  conceptId?: string;
+  conceptTitle?: string;
+  subjectId?: string;
+  subjectName?: string;
+  examId?: string;
+  goalId?: string;
+  materialId?: string;
+  title: string;
+  message: string;
+  reason: string; // Identifiable transparent rationale
+  sourceSignals: string[];
+  priority: RecommendationPriority;
+  actionType: RecommendationActionType;
+  actionPayload?: Record<string, any>;
+  mascotState: 'thinking' | 'recommending' | 'encouraging' | 'warning' | 'celebrating' | 'curious';
+  bubblePrompt: string; // Short conversational speech bubble
+  createdAt: string;
+  shownAt?: string;
+  dismissedAt?: string;
+  snoozedUntil?: string;
+  acceptedAt?: string;
+  completedAt?: string;
+  outcome?: RecommendationOutcome;
+  suppressedRule?: string;
+}
+
+export interface CompanionNotificationPreferences {
+  enableHighPriority: boolean;
+  enableMediumPriority: boolean;
+  enableLowPriority: boolean;
+  suppressedRuleIds: string[];
+  cornerCompanionVisible: boolean;
+  quietHoursEnabled: boolean;
+  quietHoursStart: string; // "22:00"
+  quietHoursEnd: string;   // "06:30"
+}
+
+

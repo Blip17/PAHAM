@@ -18,6 +18,7 @@ import { StudyTimerModal } from './views/StudyTimerModal';
 import { ToastProvider } from './components/ui/Toast';
 import { ErrorBoundary } from './components/ui/ErrorBoundary';
 import { MascotCompanionCorner } from './components/companion/MascotCompanionCorner';
+import { GuardianDashboard } from './guardian/GuardianDashboard';
 // Entry experience
 import { EntryView } from './entry/EntryView';
 import { AuthPanel } from './entry/AuthPanel';
@@ -347,6 +348,9 @@ export function App() {
               }}
             />
           )}
+          {/* Development-Only PAHAM Quality Guardian */}
+          <GuardianDashboard />
+
           <Analytics />
         </ErrorBoundary>
       </ToastProvider>

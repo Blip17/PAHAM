@@ -13,8 +13,9 @@ export const DEFAULT_BUDGET_CONFIG: BudgetConfig = {
   warnThreshold: 0.8,
 };
 
+import { aiSecurityVault } from './aiSecurity';
+
 const STORAGE_KEY_BUDGET = 'paham_ai_budget_state';
-const STORAGE_KEY_API_KEY = 'paham_gemini_api_key';
 const CACHE_PREFIX = 'paham_ai_cache_';
 
 export class AIBudgetGuard {
@@ -26,17 +27,12 @@ export class AIBudgetGuard {
     this.hourlyLimit = config.hourlyCallLimit;
   }
 
-  public getApiKey(): string | null {
-    // Check localStorage or environment variable
-    return localStorage.getItem(STORAGE_KEY_API_KEY) || (import.meta as any).env?.VITE_GEMINI_API_KEY || null;
+  public async getApiKey(): Promise<string | null> {
+    return aiSecurityVault.getActiveApiKey();
   }
 
-  public setApiKey(key: string): void {
-    if (key.trim()) {
-      localStorage.setItem(STORAGE_KEY_API_KEY, key.trim());
-    } else {
-      localStorage.removeItem(STORAGE_KEY_API_KEY);
-    }
+  public async setApiKey(key: string): Promise<void> {
+    await aiSecurityVault.setApiKey(key, 'session');
   }
 
   public getUsageState(): {

@@ -1,6 +1,3 @@
-// Settings View for PAHAM
-// School profile, Subject & Chapter Manager, Gemini API Manager, Local Database Backup, and Account Management
-
 import React, { useState, useEffect } from 'react';
 import { 
   Save, 
@@ -13,12 +10,24 @@ import {
   LogOut, 
   User,
   RotateCcw,
-  BookOpen
+  BookOpen,
+  Key,
+  Eye,
+  EyeOff,
+  ShieldCheck,
+  Zap,
+  Sparkles,
+  Layers,
+  HelpCircle,
+  Clock,
+  Radio
 } from 'lucide-react';
 import { db, initializeDatabaseSeed } from '../core/db';
 import { UserProfile, GradeLevel, Semester, Subject, Chapter } from '../core/types';
 import { budgetGuard } from '../services/ai/budgetGuard';
-import { GoogleGenAI } from '@google/genai';
+import { aiService, aiSecurityVault, AIModelName, AIStorageMode, AIProviderConfig, maskApiKey } from '../services/ai/aiProvider';
+import { Button } from '../components/ui/Button';
+import { Badge } from '../components/ui/Badge';
 
 interface SettingsViewProps {
   userProfile: UserProfile;
@@ -34,10 +43,21 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   onReplayTutorial,
 }) => {
   const [profile, setProfile] = useState<UserProfile>(userProfile);
+  
+  // AI Provider System State
+  const [aiConfig, setAiConfig] = useState<AIProviderConfig>({
+    activeProvider: 'paham',
+    selectedModel: 'gemini-2.5-flash',
+    storageMode: 'session',
+    fallbackEnabled: true,
+    hasCustomKey: false,
+  });
   const [apiKeyInput, setApiKeyInput] = useState<string>('');
-  const [isApiKeySaved, setIsApiKeySaved] = useState<boolean>(false);
+  const [showApiKey, setShowApiKey] = useState<boolean>(false);
+  const [isEditingKey, setIsEditingKey] = useState<boolean>(false);
   const [isTestingKey, setIsTestingKey] = useState<boolean>(false);
-  const [testResult, setTestResult] = useState<{ success: boolean; message: string } | null>(null);
+  const [testResult, setTestResult] = useState<{ success: boolean; message: string; latencyMs?: number } | null>(null);
+  const [aiToastMessage, setAiToastMessage] = useState<string | null>(null);
   
   const [budgetUsage, setBudgetUsage] = useState<any>(null);
   const [isSavedToast, setIsSavedToast] = useState<boolean>(false);
@@ -57,11 +77,8 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
 
   useEffect(() => {
     async function loadSettings() {
-      const existingKey = budgetGuard.getApiKey();
-      if (existingKey) {
-        setApiKeyInput(existingKey);
-        setIsApiKeySaved(true);
-      }
+      const config = await aiSecurityVault.getConfig();
+      setAiConfig(config);
 
       setBudgetUsage(budgetGuard.getUsageState());
 
@@ -120,32 +137,39 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
     }
   };
 
-  const handleSaveApiKey = () => {
-    budgetGuard.setApiKey(apiKeyInput);
-    setIsApiKeySaved(Boolean(apiKeyInput.trim()));
-    setBudgetUsage(budgetGuard.getUsageState());
-    setTestResult(null);
-  };
-
-  const handleTestApiKey = async () => {
+  // ── AI PROVIDER MANAGEMENT HANDLERS ──────────────────────
+  const handleConnectKey = async () => {
     if (!apiKeyInput.trim()) return;
     setIsTestingKey(true);
     setTestResult(null);
 
     try {
-      const client = new GoogleGenAI({ apiKey: apiKeyInput.trim() });
-      const interaction = await client.interactions.create({
-        model: 'gemini-3.6-flash',
-        input: 'Katakan "OK" untuk tes koneksi.',
+      // 1. Test key validity first
+      const test = await aiService.testConnection('gemini', apiKeyInput.trim());
+      setTestResult({
+        success: test.success,
+        message: test.message,
+        latencyMs: test.latencyMs,
       });
 
-      if (interaction.output_text) {
-        setTestResult({
-          success: true,
-          message: 'Koneksi ke Gemini 3.6 Flash berhasil terverifikasi!',
+      if (test.success) {
+        // 2. Store securely in vault (memory or AES-GCM encrypted)
+        await aiSecurityVault.setApiKey(apiKeyInput.trim(), aiConfig.storageMode);
+        aiSecurityVault.saveConfig({
+          activeProvider: 'gemini',
+          hasCustomKey: true,
+          storageMode: aiConfig.storageMode,
+          selectedModel: aiConfig.selectedModel,
+          fallbackEnabled: aiConfig.fallbackEnabled,
         });
-        budgetGuard.setApiKey(apiKeyInput);
-        setIsApiKeySaved(true);
+
+        const updatedConfig = await aiSecurityVault.getConfig();
+        setAiConfig(updatedConfig);
+        setIsEditingKey(false);
+        setApiKeyInput('');
+
+        setAiToastMessage('Kunci Gemini API berhasil terhubung dan diaktifkan!');
+        setTimeout(() => setAiToastMessage(null), 3000);
       }
     } catch (err: any) {
       setTestResult({
@@ -155,6 +179,65 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
     } finally {
       setIsTestingKey(false);
     }
+  };
+
+  const handleTestKeyOnly = async () => {
+    setIsTestingKey(true);
+    setTestResult(null);
+
+    try {
+      const keyToTest = apiKeyInput.trim() || undefined;
+      const test = await aiService.testConnection('gemini', keyToTest);
+      setTestResult({
+        success: test.success,
+        message: test.message,
+        latencyMs: test.latencyMs,
+      });
+    } catch (err: any) {
+      setTestResult({
+        success: false,
+        message: err.message || 'Koneksi gagal saat pengujian.',
+      });
+    } finally {
+      setIsTestingKey(false);
+    }
+  };
+
+  const handleDisconnectKey = async () => {
+    await aiSecurityVault.clearApiKey();
+    aiSecurityVault.saveConfig({
+      activeProvider: 'paham',
+      hasCustomKey: false,
+      maskedKeySnippet: undefined,
+    });
+
+    const updatedConfig = await aiSecurityVault.getConfig();
+    setAiConfig(updatedConfig);
+    setApiKeyInput('');
+    setIsEditingKey(false);
+    setTestResult(null);
+
+    setAiToastMessage('Kunci API telah diputuskan. Sistem kembali ke mode lokal PAHAM.');
+    setTimeout(() => setAiToastMessage(null), 3000);
+  };
+
+  const handleSelectModel = (model: AIModelName) => {
+    const updated = { ...aiConfig, selectedModel: model };
+    setAiConfig(updated);
+    aiSecurityVault.saveConfig({ selectedModel: model });
+  };
+
+  const handleSelectStorageMode = (mode: AIStorageMode) => {
+    const updated = { ...aiConfig, storageMode: mode };
+    setAiConfig(updated);
+    aiSecurityVault.saveConfig({ storageMode: mode });
+  };
+
+  const handleToggleFallback = () => {
+    const nextVal = !aiConfig.fallbackEnabled;
+    const updated = { ...aiConfig, fallbackEnabled: nextVal };
+    setAiConfig(updated);
+    aiSecurityVault.saveConfig({ fallbackEnabled: nextVal });
   };
 
   const handleResetSeedData = async () => {
@@ -420,87 +503,270 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
         </div>
       </div>
 
-      {/* 4. Integrasi Google Gemini API & Budget Guard */}
+      {/* 4. Integrasi Penyedia AI (AI Provider System) */}
       <div className="paper-sheet p-6 space-y-5">
         <div className="flex items-center justify-between pb-3 border-b border-paper-200">
           <div>
             <span className="text-[10px] font-mono uppercase tracking-wider text-moss-800 font-semibold block">
-              AI Accelerator (Optional)
+              Penyedia Kecerdasan Buatan
             </span>
             <h3 className="font-serif text-lg font-medium text-ink-950">
-              Google Gemini 3.6 Flash
+              Gunakan Gemini API Key Milikmu
             </h3>
           </div>
-          {isApiKeySaved ? (
-            <span className="badge-moss text-xs">Aktif</span>
+          {aiConfig.hasCustomKey ? (
+            <Badge variant="moss" size="sm" dot>
+              Gemini Terhubung ({aiConfig.selectedModel})
+            </Badge>
           ) : (
-            <span className="badge-neutral text-xs">Mode Offline / Local</span>
+            <Badge variant="amber" size="sm" dot>
+              Mesin Cerdas Lokal PAHAM
+            </Badge>
           )}
         </div>
 
-        <p className="text-xs text-ink-600 font-serif leading-relaxed">
-          PAHAM berjalan 100% lokal dengan basis data IndexedDB dan mesin FSRS. Jika kamu menambahkan Google Gemini API Key, fitur pembaca tulisan tangan guru buram dan penjelasan mendalam akan semakin cerdas.
-        </p>
+        {/* Security & Privacy Notice Banner */}
+        <div className="p-3.5 rounded bg-paper-100 border border-paper-200 text-xs font-serif text-ink-700 flex items-start gap-2.5">
+          <ShieldCheck className="w-4 h-4 text-moss-800 shrink-0 mt-0.5" />
+          <div className="space-y-1">
+            <p className="font-semibold text-ink-900">Keamanan Kunci API Kamu</p>
+            <p className="text-[11px] text-ink-600 leading-relaxed">
+              Kunci API kamu digunakan untuk memproses inferensi AI cerdas (ekstraksi catatan guru & penjelasan mendalam). Jangan pernah membagikan kunci API kamu kepada orang lain. Kunci tidak pernah diekspos dalam log publik atau analytics.
+            </p>
+          </div>
+        </div>
 
-        <div className="space-y-3">
-          <div>
-            <label className="text-xs font-medium text-ink-700 block mb-1">Gemini API Key</label>
-            <div className="flex items-center gap-2">
-              <input
-                type="password"
-                placeholder="AIzaSy..."
-                value={apiKeyInput}
-                onChange={(e) => setApiKeyInput(e.target.value)}
-                className="flex-1 bg-paper-100 border border-paper-300 rounded px-3 py-1.5 text-xs text-ink-900 focus:bg-paper-50 focus:border-moss-700 font-mono"
-              />
-              <button
-                type="button"
-                onClick={handleSaveApiKey}
-                className="btn-secondary text-xs py-1.5 px-3"
-              >
-                Simpan
-              </button>
-              <button
-                type="button"
-                onClick={handleTestApiKey}
-                disabled={!apiKeyInput.trim() || isTestingKey}
-                className="btn-primary text-xs py-1.5 px-3 disabled:opacity-50"
-              >
-                {isTestingKey ? 'Menguji...' : 'Uji Koneksi'}
-              </button>
+        {/* Toast Feedback */}
+        {aiToastMessage && (
+          <div className="p-3 rounded bg-moss-50 border border-moss-200 text-xs text-moss-950 flex items-center gap-2 animate-fadeIn">
+            <CheckCircle className="w-4 h-4 text-moss-700 shrink-0" />
+            <span>{aiToastMessage}</span>
+          </div>
+        )}
+
+        {/* Active Key Status Card or Key Input Form */}
+        {aiConfig.hasCustomKey && !isEditingKey ? (
+          <div className="p-4 rounded-lg bg-paper-50 border border-moss-200/80 shadow-subtle space-y-3">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Key className="w-4 h-4 text-moss-800" />
+                <span className="text-xs font-mono font-bold text-ink-900">
+                  {aiConfig.maskedKeySnippet || 'AIzaSy...****'}
+                </span>
+                <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-moss-100 text-moss-900">
+                  {aiConfig.storageMode === 'session' ? 'Mode Sesi (RAM)' : 'Terenkripsi AES'}
+                </span>
+              </div>
+
+              <div className="flex items-center gap-1.5">
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  onClick={handleTestKeyOnly}
+                  isLoading={isTestingKey}
+                >
+                  Uji Koneksi
+                </Button>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => setIsEditingKey(true)}
+                >
+                  Ganti Key
+                </Button>
+                <Button
+                  size="sm"
+                  variant="danger"
+                  onClick={handleDisconnectKey}
+                >
+                  Putuskan
+                </Button>
+              </div>
+            </div>
+
+            <p className="text-[11px] font-serif text-ink-500">
+              Permintaan AI saat ini diarahkan ke model <strong className="text-ink-800">{aiConfig.selectedModel}</strong> menggunakan kuota kuncimu.
+            </p>
+          </div>
+        ) : (
+          <div className="space-y-4">
+            <div>
+              <div className="flex items-center justify-between mb-1">
+                <label className="text-xs font-medium text-ink-700 block">
+                  Google Gemini API Key
+                </label>
+                <a
+                  href="https://aistudio.google.com/app/apikey"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-[11px] font-mono text-moss-800 hover:underline"
+                >
+                  Dapatkan API Key di Google AI Studio &rarr;
+                </a>
+              </div>
+              <div className="flex items-center gap-2">
+                <div className="relative flex-1">
+                  <input
+                    type={showApiKey ? 'text' : 'password'}
+                    placeholder="AIzaSy..."
+                    value={apiKeyInput}
+                    onChange={(e) => setApiKeyInput(e.target.value)}
+                    className="w-full bg-paper-100 border border-paper-300 rounded px-3 py-2 pr-9 text-xs text-ink-900 focus:bg-paper-50 focus:border-moss-700 font-mono"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowApiKey(p => !p)}
+                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-ink-400 hover:text-ink-700"
+                    title={showApiKey ? 'Sembunyikan Kunci' : 'Tampilkan Kunci'}
+                  >
+                    {showApiKey ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                  </button>
+                </div>
+
+                <Button
+                  onClick={handleConnectKey}
+                  disabled={!apiKeyInput.trim()}
+                  isLoading={isTestingKey}
+                  size="sm"
+                  variant="primary"
+                >
+                  Hubungkan Key
+                </Button>
+                {isEditingKey && (
+                  <Button
+                    onClick={() => {
+                      setIsEditingKey(false);
+                      setApiKeyInput('');
+                      setTestResult(null);
+                    }}
+                    size="sm"
+                    variant="ghost"
+                  >
+                    Batal
+                  </Button>
+                )}
+              </div>
+            </div>
+
+            {/* Storage Mode Radio */}
+            <div className="space-y-1.5 pt-1">
+              <span className="text-[11px] font-mono text-ink-600 uppercase tracking-wider block">
+                Metode Penyimpanan Kunci:
+              </span>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
+                <label className={`p-2.5 rounded border cursor-pointer flex items-start gap-2 transition ${
+                  aiConfig.storageMode === 'session' ? 'bg-moss-50/70 border-moss-600' : 'bg-paper-100 border-paper-200 hover:bg-paper-150'
+                }`}>
+                  <input
+                    type="radio"
+                    name="storageMode"
+                    value="session"
+                    checked={aiConfig.storageMode === 'session'}
+                    onChange={() => handleSelectStorageMode('session')}
+                    className="mt-0.5 accent-moss-800"
+                  />
+                  <div>
+                    <span className="font-semibold text-ink-900 block">Hanya Sesi Ini (Paling Aman)</span>
+                    <span className="text-[10px] text-ink-500 font-serif">Disimpan di memori RAM, hilang saat tab ditutup.</span>
+                  </div>
+                </label>
+
+                <label className={`p-2.5 rounded border cursor-pointer flex items-start gap-2 transition ${
+                  aiConfig.storageMode === 'persistent' ? 'bg-moss-50/70 border-moss-600' : 'bg-paper-100 border-paper-200 hover:bg-paper-150'
+                }`}>
+                  <input
+                    type="radio"
+                    name="storageMode"
+                    value="persistent"
+                    checked={aiConfig.storageMode === 'persistent'}
+                    onChange={() => handleSelectStorageMode('persistent')}
+                    className="mt-0.5 accent-moss-800"
+                  />
+                  <div>
+                    <span className="font-semibold text-ink-900 block">Simpan Terenkripsi (AES-GCM)</span>
+                    <span className="text-[10px] text-ink-500 font-serif">Dienkripsi Web Crypto di perangkat ini.</span>
+                  </div>
+                </label>
+              </div>
             </div>
           </div>
+        )}
 
-          {testResult && (
-            <div className={`p-3 rounded border text-xs flex items-start gap-2 ${
-              testResult.success 
-                ? 'bg-moss-50 border-moss-200 text-moss-950' 
-                : 'bg-terracotta-50 border-terracotta-200 text-terracotta-900'
-            }`}>
-              {testResult.success ? <CheckCircle className="w-4 h-4 text-moss-700 shrink-0 mt-0.5" /> : <AlertCircle className="w-4 h-4 text-terracotta-700 shrink-0 mt-0.5" />}
-              <span>{testResult.message}</span>
+        {/* Model Selection & Fallback Controls */}
+        <div className="space-y-3 pt-3 border-t border-paper-200">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+            <div>
+              <label className="text-[11px] font-mono text-ink-700 block mb-1">
+                Pilihan Model Gemini
+              </label>
+              <select
+                value={aiConfig.selectedModel}
+                onChange={(e) => handleSelectModel(e.target.value as AIModelName)}
+                className="w-full bg-paper-100 border border-paper-300 rounded px-2.5 py-1.5 text-xs text-ink-900 focus:bg-paper-50 focus:border-moss-700"
+              >
+                <option value="gemini-2.5-flash">Gemini 2.5 Flash (Cepat & Responsif - Rekomendasi)</option>
+                <option value="gemini-2.5-pro">Gemini 2.5 Pro (Penalaran Kompleks)</option>
+                <option value="gemini-1.5-flash">Gemini 1.5 Flash (Standar)</option>
+              </select>
             </div>
-          )}
 
-          {/* Budget Guard Usage Monitor */}
-          {budgetUsage && (
-            <div className="p-3.5 bg-paper-100 rounded border border-paper-200 text-xs space-y-2">
-              <div className="flex items-center justify-between text-ink-700 font-mono text-[11px]">
-                <span>Penggunaan Kuota Hari Ini</span>
-                <span>{budgetUsage.callsToday} / {budgetUsage.dailyLimit} panggilan</span>
-              </div>
-              <div className="w-full h-1.5 bg-paper-300 rounded-full overflow-hidden">
-                <div 
-                  className="h-full bg-moss-700 rounded-full"
-                  style={{ width: `${Math.min(100, (budgetUsage.callsToday / budgetUsage.dailyLimit) * 100)}%` }}
+            <div className="flex items-center">
+              <label className="flex items-start gap-2 cursor-pointer mt-3 sm:mt-0">
+                <input
+                  type="checkbox"
+                  checked={aiConfig.fallbackEnabled}
+                  onChange={handleToggleFallback}
+                  className="mt-0.5 accent-moss-800"
                 />
-              </div>
-              <span className="text-[10px] text-ink-400 block font-serif">
-                Proteksi otomatis menjaga agar aplikasi tidak melampaui batas kuota gratis API.
-              </span>
+                <div className="space-y-0.5">
+                  <span className="font-semibold text-ink-900 block text-xs">Aktifkan Fallback Lokal Otomatis</span>
+                  <p className="text-[10px] text-ink-500 font-serif leading-tight">
+                    Otomatis gunakan mesin offline PAHAM jika kuota API habis atau offline.
+                  </p>
+                </div>
+              </label>
             </div>
-          )}
+          </div>
         </div>
+
+        {/* Test Result Feedback Banner */}
+        {testResult && (
+          <div className={`p-3 rounded border text-xs flex items-start gap-2.5 animate-fadeIn ${
+            testResult.success 
+              ? 'bg-moss-50 border-moss-200 text-moss-950' 
+              : 'bg-terracotta-50 border-terracotta-200 text-terracotta-900'
+          }`}>
+            {testResult.success ? (
+              <CheckCircle className="w-4 h-4 text-moss-700 shrink-0 mt-0.5" />
+            ) : (
+              <AlertCircle className="w-4 h-4 text-terracotta-700 shrink-0 mt-0.5" />
+            )}
+            <div className="space-y-0.5">
+              <p className="font-medium">{testResult.message}</p>
+              {testResult.latencyMs !== undefined && testResult.latencyMs > 0 && (
+                <span className="text-[10px] font-mono text-moss-800 block">
+                  Waktu respon: {testResult.latencyMs} ms
+                </span>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* Usage Monitor */}
+        {budgetUsage && (
+          <div className="p-3 bg-paper-100 rounded border border-paper-200 text-xs space-y-1.5">
+            <div className="flex items-center justify-between text-ink-700 font-mono text-[11px]">
+              <span>Panggilan Hari Ini</span>
+              <span>{budgetUsage.callsToday} / {aiConfig.hasCustomKey ? '300' : '50'} panggilan</span>
+            </div>
+            <div className="w-full h-1.5 bg-paper-300 rounded-full overflow-hidden">
+              <div 
+                className="h-full bg-moss-700 rounded-full"
+                style={{ width: `${Math.min(100, (budgetUsage.callsToday / (aiConfig.hasCustomKey ? 300 : 50)) * 100)}%` }}
+              />
+            </div>
+          </div>
+        )}
       </div>
 
       {/* 5. Manajemen Database & Backup */}

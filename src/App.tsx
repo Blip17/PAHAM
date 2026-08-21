@@ -19,6 +19,7 @@ import { ToastProvider } from './components/ui/Toast';
 import { ErrorBoundary } from './components/ui/ErrorBoundary';
 import { MascotCompanionCorner } from './components/companion/MascotCompanionCorner';
 import { GuardianDashboard } from './guardian/GuardianDashboard';
+import { DevCockpit } from './dev/DevCockpit';
 // Entry experience
 import { EntryView } from './entry/EntryView';
 import { AuthPanel } from './entry/AuthPanel';
@@ -39,7 +40,8 @@ export type AppState =
   | 'onboarding'   // 7-step personalized setup
   | 'transition'   // Signature brand animation
   | 'arrival'      // Personalized "Selamat datang, [name]" screen
-  | 'app';         // Main PAHAM dashboard
+  | 'app'          // Main PAHAM dashboard
+  | 'dev';         // Dedicated internal PAHAM Developer Cockpit (/dev)
 
 export function App() {
   const [appState, setAppState] = useState<AppState>('loading');
@@ -61,7 +63,22 @@ export function App() {
     async function bootstrap() {
       await initializeDatabaseSeed();
 
+      // Check if developer route requested (/dev or #dev or query param)
+      const isDevRoute = typeof window !== 'undefined' && (
+        window.location.pathname === '/dev' ||
+        window.location.pathname.startsWith('/dev') ||
+        window.location.hash === '#dev' ||
+        window.location.search.includes('view=dev') ||
+        window.location.search.includes('dev=true')
+      );
+
       const profile = await authService.getActiveProfile();
+
+      if (isDevRoute) {
+        setUserProfile(profile);
+        setAppState('dev');
+        return;
+      }
 
       if (!profile) {
         setAppState('entry');
@@ -81,16 +98,40 @@ export function App() {
 
     bootstrap();
 
+    // Listen for hash & route changes
+    const handleLocationCheck = () => {
+      if (
+        window.location.pathname === '/dev' || 
+        window.location.hash === '#dev' || 
+        window.location.search.includes('view=dev')
+      ) {
+        setAppState('dev');
+      }
+    };
+    window.addEventListener('hashchange', handleLocationCheck);
+    window.addEventListener('popstate', handleLocationCheck);
+
+    // Global shortcut Ctrl+Shift+D for Dev Cockpit
+    const handleDevShortcut = (e: KeyboardEvent) => {
+      if (e.ctrlKey && e.shiftKey && (e.key === 'D' || e.key === 'd')) {
+        setAppState(prev => prev === 'dev' ? (userProfile ? 'app' : 'entry') : 'dev');
+      }
+    };
+    window.addEventListener('keydown', handleDevShortcut);
+
     // Listen to Supabase Auth State changes
     const { data: { subscription } } = authService.onAuthStateChange(async (event, session) => {
       if (event === 'SIGNED_OUT' || !session) {
         setUserProfile(null);
-        setAppState('entry');
+        setAppState(prev => prev === 'dev' ? 'dev' : 'entry');
       }
     });
 
     return () => {
       subscription.unsubscribe();
+      window.removeEventListener('hashchange', handleLocationCheck);
+      window.removeEventListener('popstate', handleLocationCheck);
+      window.removeEventListener('keydown', handleDevShortcut);
     };
   }, []);
 
@@ -230,6 +271,31 @@ export function App() {
     return (
       <>
         <ArrivalScreen profile={userProfile} onEnter={handleEnterApp} />
+        <Analytics />
+      </>
+    );
+  }
+
+  // ── Dedicated Internal PAHAM Developer Cockpit (/dev) ──────────────────────
+  if (appState === 'dev') {
+    return (
+      <>
+        <DevCockpit
+          onExit={() => {
+            if (window.location.hash === '#dev') {
+              window.location.hash = '';
+            }
+            if (window.location.pathname.startsWith('/dev')) {
+              window.history.pushState({}, '', '/');
+            }
+            setAppState(userProfile ? 'app' : 'entry');
+          }}
+          onImpersonateUser={(syntheticProfile) => {
+            setUserProfile(syntheticProfile);
+            setAppState('app');
+          }}
+          activeProfile={userProfile}
+        />
         <Analytics />
       </>
     );

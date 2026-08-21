@@ -275,10 +275,21 @@ export const GuardianDashboard: React.FC = () => {
             {/* Modal Footer */}
             <div className="p-4 border-t border-paper-200 bg-paper-100/60 flex items-center justify-between text-[11px] font-mono text-ink-500">
               <span>Shortcut: <kbd className="px-1 py-0.5 rounded bg-paper-200 border border-paper-300">Ctrl+Shift+Q</kbd></span>
-              <span className="flex items-center gap-1.5 text-moss-900 font-bold">
-                <ShieldCheck className="w-4 h-4" />
-                PAHAM Verified
-              </span>
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={() => {
+                    setIsOpen(false);
+                    window.location.hash = '#dev';
+                  }}
+                  className="px-2.5 py-1 rounded bg-ink-950 text-paper-50 text-[10px] font-bold hover:bg-ink-900 transition"
+                >
+                  Buka Full Dev Cockpit (/dev) &rarr;
+                </button>
+                <span className="flex items-center gap-1.5 text-moss-900 font-bold">
+                  <ShieldCheck className="w-4 h-4" />
+                  PAHAM Verified
+                </span>
+              </div>
             </div>
 
           </div>

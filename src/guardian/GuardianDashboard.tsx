@@ -45,6 +45,15 @@ export const GuardianDashboard: React.FC = () => {
   useEffect(() => {
     runAudit();
 
+    // Check if auto-open requested via URL or session
+    if (typeof window !== 'undefined' && (window.location.search.includes('guardian') || window.location.hash.includes('guardian'))) {
+      setIsOpen(true);
+    }
+
+    // Listen for custom open event
+    const handleCustomOpen = () => setIsOpen(true);
+    window.addEventListener('open-guardian-dashboard', handleCustomOpen);
+
     // Listen for Ctrl+Shift+Q shortcut
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.ctrlKey && e.shiftKey && (e.key === 'Q' || e.key === 'q')) {
@@ -52,7 +61,10 @@ export const GuardianDashboard: React.FC = () => {
       }
     };
     window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+      window.removeEventListener('open-guardian-dashboard', handleCustomOpen);
+    };
   }, []);
 
   const filteredFindings = report?.findings.filter(f => {

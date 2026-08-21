@@ -17,7 +17,8 @@ import {
   LogOut, 
   GraduationCap, 
   Sparkles,
-  Calendar
+  Calendar,
+  ShieldCheck
 } from 'lucide-react';
 import { db } from '../../core/db';
 import { UserProfile, DailyStudyPlan, Concept } from '../../core/types';
@@ -222,6 +223,20 @@ export const AppShell: React.FC<AppShellProps> = ({
                 Keluar
               </button>
             </div>
+
+            <button
+              onClick={() => window.dispatchEvent(new CustomEvent('open-guardian-dashboard'))}
+              className="w-full pt-1.5 border-t border-paper-200/80 text-[10px] font-mono flex items-center justify-between text-ink-600 hover:text-ink-950 transition"
+              title="Buka Quality Guardian Cockpit (Ctrl+Shift+Q)"
+            >
+              <span className="flex items-center gap-1 font-semibold">
+                <ShieldCheck className="w-3 h-3 text-moss-600" />
+                QA Guardian Cockpit
+              </span>
+              <span className="text-[9px] px-1 py-0.2 rounded bg-moss-100 text-moss-900 font-bold">
+                Ctrl+Shift+Q
+              </span>
+            </button>
           </div>
         </div>
       </aside>
@@ -236,6 +251,14 @@ export const AppShell: React.FC<AppShellProps> = ({
         </div>
 
         <div className="flex items-center gap-2">
+          <button
+            onClick={() => window.dispatchEvent(new CustomEvent('open-guardian-dashboard'))}
+            className="p-1.5 rounded bg-ink-950 text-paper-50"
+            title="Quality Guardian"
+            aria-label="Quality Guardian"
+          >
+            <ShieldCheck className="w-3.5 h-3.5 text-moss-400" />
+          </button>
           <button
             onClick={onOpenScan}
             className="p-2 rounded bg-paper-200 text-ink-700 hover:bg-paper-300 active:bg-paper-400"

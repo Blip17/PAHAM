@@ -19,6 +19,7 @@ import { ToastProvider } from './components/ui/Toast';
 import { ErrorBoundary } from './components/ui/ErrorBoundary';
 import { MascotCompanionCorner } from './components/companion/MascotCompanionCorner';
 import { TopLiveAnnouncementBubble } from './components/companion/TopLiveAnnouncementBubble';
+import { RealtimeProvider } from './services/realtime/RealtimeProvider';
 import { GuardianDashboard } from './guardian/GuardianDashboard';
 import { DevCockpit } from './dev/DevCockpit';
 // Entry experience
@@ -310,125 +311,127 @@ export function App() {
   // ── Main PAHAM application ───────────────────────────────────────────────
   if (appState === 'app' && userProfile) {
     return (
-      <ToastProvider>
-        <ErrorBoundary>
-          <AppShell
-            userProfile={userProfile}
-            currentTab={activeTab}
-            onSelectTab={(tab: string) => {
-              setActiveTab(tab);
-              if (tab !== 'learn') setSelectedConceptId(undefined);
-              if (tab !== 'exam') setSelectedExamId(undefined);
-            }}
-            onOpenScan={() => setIsScanModalOpen(true)}
-            onStartStudy={handleStartStudy}
-            onOpenTimer={handleOpenTimer}
-            onLogout={handleLogout}
-            activeTimerConcept={activeTimerConceptTitle}
-            activeTimerSeconds={activeTimerMinutes * 60}
-          >
-            {activeTab === 'home' && (
-              <HomeView
-                userProfile={userProfile}
-                onStartStudy={handleStartStudy}
-                onOpenScan={() => setIsScanModalOpen(true)}
-                onOpenQuiz={handleOpenQuiz}
-                onOpenExam={handleOpenExam}
-                onOpenMaterials={() => setActiveTab('materials')}
-                onOpenFlashcards={() => setActiveTab('flashcards')}
-                onOpenSchedule={() => setActiveTab('schedule')}
-              />
-            )}
-            {activeTab === 'flashcards' && (
-              <FlashcardsView
-                initialConceptId={selectedConceptId}
-                onStartLearnConcept={handleStartStudy}
-              />
-            )}
-            {activeTab === 'schedule' && (
-              <ScheduleView
-                onStartStudyConcept={handleStartStudy}
-              />
-            )}
-            {activeTab === 'materials' && (
-              <MaterialsView
-                onStartStudyConcept={handleStartStudy}
-                onOpenScanModal={() => setIsScanModalOpen(true)}
-              />
-            )}
-            {activeTab === 'learn' && (
-              <LearnView
-                initialConceptId={selectedConceptId}
-                onFinishSession={() => setActiveTab('home')}
-                onOpenTimer={handleOpenTimer}
-              />
-            )}
-            {activeTab === 'quiz' && (
-              <QuizView
-                initialConceptId={selectedConceptId}
-                onFinishQuiz={() => setActiveTab('home')}
-                onStartLearnConcept={handleStartStudy}
-              />
-            )}
-            {activeTab === 'exam' && (
-              <ExamSimulationView
-                initialExamId={selectedExamId}
-                onFinishExam={() => setActiveTab('home')}
-                onStartLearnConcept={handleStartStudy}
-              />
-            )}
-            {activeTab === 'progress' && (
-              <ProgressView onStartLearnConcept={handleStartStudy} />
-            )}
-            {activeTab === 'settings' && (
-              <SettingsView
-                userProfile={userProfile}
-                onUpdateProfile={handleUpdateProfile}
-                onLogout={handleLogout}
-                onReplayTutorial={() => setIsTutorialOpen(true)}
-              />
-            )}
-          </AppShell>
-
-          {/* Live Top Surprise Announcement / Chat Bubble */}
-          <TopLiveAnnouncementBubble />
-
-          {/* Subtle Floating Learning Companion */}
-          <MascotCompanionCorner
-            currentTab={activeTab}
-            onStartStudy={handleStartStudy}
-            onOpenFlashcards={() => setActiveTab('flashcards')}
-            onOpenQuiz={handleOpenQuiz}
-            onOpenExam={(examId) => examId ? handleOpenExam(examId) : undefined}
-            onOpenMaterials={() => setActiveTab('materials')}
-          />
-
-          <ScanFlowModal
-            isOpen={isScanModalOpen}
-            onClose={() => setIsScanModalOpen(false)}
-            onMaterialCreated={handleMaterialCreated}
-          />
-          <StudyTimerModal
-            isOpen={isTimerModalOpen}
-            onClose={() => setIsTimerModalOpen(false)}
-            conceptTitle={activeTimerConceptTitle || 'Sesi Belajar Terfokus'}
-            plannedMinutes={activeTimerMinutes}
-          />
-          {isTutorialOpen && (
-            <TutorialFlow
-              onComplete={() => setIsTutorialOpen(false)}
-              onOpenScan={() => {
-                setIsTutorialOpen(false);
-                setIsScanModalOpen(true);
+      <RealtimeProvider userProfile={userProfile}>
+        <ToastProvider>
+          <ErrorBoundary>
+            <AppShell
+              userProfile={userProfile}
+              currentTab={activeTab}
+              onSelectTab={(tab: string) => {
+                setActiveTab(tab);
+                if (tab !== 'learn') setSelectedConceptId(undefined);
+                if (tab !== 'exam') setSelectedExamId(undefined);
               }}
-            />
-          )}
-          {/* Development-Only PAHAM Quality Guardian (strictly hidden in production) */}
-          {import.meta.env.DEV && <GuardianDashboard />}
+              onOpenScan={() => setIsScanModalOpen(true)}
+              onStartStudy={handleStartStudy}
+              onOpenTimer={handleOpenTimer}
+              onLogout={handleLogout}
+              activeTimerConcept={activeTimerConceptTitle}
+              activeTimerSeconds={activeTimerMinutes * 60}
+            >
+              {activeTab === 'home' && (
+                <HomeView
+                  userProfile={userProfile}
+                  onStartStudy={handleStartStudy}
+                  onOpenScan={() => setIsScanModalOpen(true)}
+                  onOpenQuiz={handleOpenQuiz}
+                  onOpenExam={handleOpenExam}
+                  onOpenMaterials={() => setActiveTab('materials')}
+                  onOpenFlashcards={() => setActiveTab('flashcards')}
+                  onOpenSchedule={() => setActiveTab('schedule')}
+                />
+              )}
+              {activeTab === 'flashcards' && (
+                <FlashcardsView
+                  initialConceptId={selectedConceptId}
+                  onStartLearnConcept={handleStartStudy}
+                />
+              )}
+              {activeTab === 'schedule' && (
+                <ScheduleView
+                  onStartStudyConcept={handleStartStudy}
+                />
+              )}
+              {activeTab === 'materials' && (
+                <MaterialsView
+                  onStartStudyConcept={handleStartStudy}
+                  onOpenScanModal={() => setIsScanModalOpen(true)}
+                />
+              )}
+              {activeTab === 'learn' && (
+                <LearnView
+                  initialConceptId={selectedConceptId}
+                  onFinishSession={() => setActiveTab('home')}
+                  onOpenTimer={handleOpenTimer}
+                />
+              )}
+              {activeTab === 'quiz' && (
+                <QuizView
+                  initialConceptId={selectedConceptId}
+                  onFinishQuiz={() => setActiveTab('home')}
+                  onStartLearnConcept={handleStartStudy}
+                />
+              )}
+              {activeTab === 'exam' && (
+                <ExamSimulationView
+                  initialExamId={selectedExamId}
+                  onFinishExam={() => setActiveTab('home')}
+                  onStartLearnConcept={handleStartStudy}
+                />
+              )}
+              {activeTab === 'progress' && (
+                <ProgressView onStartLearnConcept={handleStartStudy} />
+              )}
+              {activeTab === 'settings' && (
+                <SettingsView
+                  userProfile={userProfile}
+                  onUpdateProfile={handleUpdateProfile}
+                  onLogout={handleLogout}
+                  onReplayTutorial={() => setIsTutorialOpen(true)}
+                />
+              )}
+            </AppShell>
 
-          <Analytics />
-        </ErrorBoundary>
-      </ToastProvider>
+            {/* Live Top Surprise Announcement / Chat Bubble */}
+            <TopLiveAnnouncementBubble />
+
+            {/* Subtle Floating Learning Companion */}
+            <MascotCompanionCorner
+              currentTab={activeTab}
+              onStartStudy={handleStartStudy}
+              onOpenFlashcards={() => setActiveTab('flashcards')}
+              onOpenQuiz={handleOpenQuiz}
+              onOpenExam={(examId) => examId ? handleOpenExam(examId) : undefined}
+              onOpenMaterials={() => setActiveTab('materials')}
+            />
+
+            <ScanFlowModal
+              isOpen={isScanModalOpen}
+              onClose={() => setIsScanModalOpen(false)}
+              onMaterialCreated={handleMaterialCreated}
+            />
+            <StudyTimerModal
+              isOpen={isTimerModalOpen}
+              onClose={() => setIsTimerModalOpen(false)}
+              conceptTitle={activeTimerConceptTitle || 'Sesi Belajar Terfokus'}
+              plannedMinutes={activeTimerMinutes}
+            />
+            {isTutorialOpen && (
+              <TutorialFlow
+                onComplete={() => setIsTutorialOpen(false)}
+                onOpenScan={() => {
+                  setIsTutorialOpen(false);
+                  setIsScanModalOpen(true);
+                }}
+              />
+            )}
+            {/* Development-Only PAHAM Quality Guardian (strictly hidden in production) */}
+            {import.meta.env.DEV && <GuardianDashboard />}
+
+            <Analytics />
+          </ErrorBoundary>
+        </ToastProvider>
+      </RealtimeProvider>
     );
   }
 

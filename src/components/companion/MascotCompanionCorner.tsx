@@ -15,7 +15,8 @@ import {
 import { CompanionRecommendation, CompanionNotificationPreferences } from '../../core/types';
 import { companionService, DEFAULT_COMPANION_PREFERENCES } from '../../learning/companion/companionService';
 import { liveRemoteService, LiveBroadcastPayload } from '../../dev/services/liveRemoteService';
-import { PahamMascot } from '../mascot/PahamMascot';
+import { realtimeClient } from '../../services/realtime/realtimeClient';
+import { PahamMascot, MascotState } from '../mascot/PahamMascot';
 import { RecommendationCard } from './RecommendationCard';
 import { CompanionPreferencesModal } from './CompanionPreferencesModal';
 
@@ -40,15 +41,52 @@ export const MascotCompanionCorner: React.FC<MascotCompanionCornerProps> = ({
   const [recommendations, setRecommendations] = useState<CompanionRecommendation[]>([]);
   const [preferences, setPreferences] = useState<CompanionNotificationPreferences>(DEFAULT_COMPANION_PREFERENCES);
   const [isPreferencesOpen, setIsPreferencesOpen] = useState<boolean>(false);
-  const [isLoading, setIsLoading] = useState<boolean>(false);
+  const [, setIsLoading] = useState<boolean>(false);
   const [liveOverride, setLiveOverride] = useState<LiveBroadcastPayload | null>(liveRemoteService.getCurrentOverride());
 
-  // Listen to real-time developer broadcasts (e.g. Sleepy, Custom Chat, Celebration)
+  // Listen to Server-Backed SSE Realtime Events + Local Fallback
   useEffect(() => {
-    const unsub = liveRemoteService.subscribe((payload) => {
+    // 1. Server SSE State Change / Notification
+    const unsubServerNotif = realtimeClient.subscribe('pami.notification', (serverEvent) => {
+      const payload = serverEvent.payload || {};
+      const mascotExpr: MascotState = payload.mascotState || payload.expression || 'happy';
+      setLiveOverride({
+        id: serverEvent.eventId || `server_${Date.now()}`,
+        expression: mascotExpr,
+        message: payload.message || '',
+        displayMode: payload.displayMode || 'BOTH',
+        durationSeconds: Number(payload.durationSeconds || 10),
+        playSound: payload.playSound !== false,
+        senderName: serverEvent.createdBy || payload.senderName || 'Developer',
+        timestamp: serverEvent.createdAt || new Date().toISOString(),
+      });
+    });
+
+    const unsubServerState = realtimeClient.subscribe('pami.state_change', (serverEvent) => {
+      const payload = serverEvent.payload || {};
+      const mascotExpr: MascotState = payload.mascotState || payload.expression || 'happy';
+      setLiveOverride({
+        id: serverEvent.eventId || `server_${Date.now()}`,
+        expression: mascotExpr,
+        message: payload.message || '',
+        displayMode: payload.displayMode || 'BOTH',
+        durationSeconds: Number(payload.durationSeconds || 10),
+        playSound: false,
+        senderName: serverEvent.createdBy || 'Developer',
+        timestamp: serverEvent.createdAt || new Date().toISOString(),
+      });
+    });
+
+    // 2. Local fallback
+    const unsubLocal = liveRemoteService.subscribe((payload) => {
       setLiveOverride(payload);
     });
-    return () => unsub();
+
+    return () => {
+      unsubServerNotif();
+      unsubServerState();
+      unsubLocal();
+    };
   }, []);
 
   // Load active recommendations and preferences

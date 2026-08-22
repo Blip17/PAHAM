@@ -11,6 +11,7 @@ import { liveRemoteService } from './services/liveRemoteService';
 import { devApiClient } from './services/devApiClient';
 import { sanitizeDevPayload } from '../../api/dev/_auth';
 import { REPLAY_JOURNEYS } from '../../api/dev/replay';
+import { ServerEventStore } from '../../api/events/_store';
 import { db } from '../core/db';
 
 describe('PAHAM Internal Developer Cockpit Suite', () => {
@@ -203,5 +204,85 @@ describe('PAHAM Internal Developer Cockpit Suite', () => {
     expect(recStep).toBeDefined();
     expect(recStep?.stateSnapshot.pikoEmotion).toBe('recommending');
     expect(recStep?.stateSnapshot.pikoSpeech).toContain('Diskriminan');
+  });
+
+  // ── 11. Server-Backed Realtime Event & Targeting Architecture ─────────────
+  it('broadcasts server events globally and enforces user targeting rules', () => {
+    // Setup Mock SSE clients: User A and User B
+    let receivedUserA: any = null;
+    let receivedUserB: any = null;
+
+    const unregisterA = ServerEventStore.registerClient({
+      clientId: 'client-user-a',
+      userId: 'user-a',
+      environment: 'DEVELOPMENT',
+      isTestUser: false,
+      connectedAt: new Date().toISOString(),
+      lastSeenAt: new Date().toISOString(),
+      send: (data: string) => {
+        receivedUserA = data;
+      },
+    });
+
+    const unregisterB = ServerEventStore.registerClient({
+      clientId: 'client-user-b',
+      userId: 'user-b',
+      environment: 'DEVELOPMENT',
+      isTestUser: false,
+      connectedAt: new Date().toISOString(),
+      lastSeenAt: new Date().toISOString(),
+      send: (data: string) => {
+        receivedUserB = data;
+      },
+    });
+
+    expect(ServerEventStore.getOnlineCount('DEVELOPMENT')).toBeGreaterThanOrEqual(2);
+
+    // 1. Publish Global Event -> Both User A and User B must receive it
+    const globalEvent = ServerEventStore.publishEvent({
+      eventType: 'pami.notification',
+      createdBy: 'Lead Engineer',
+      environment: 'DEVELOPMENT',
+      targetType: 'ALL_ONLINE_USERS',
+      payload: { message: 'Global realtime test', mascotState: 'happy' },
+      priority: 'NORMAL',
+      expiresAt: new Date(Date.now() + 86400000).toISOString(),
+    });
+
+    expect(globalEvent.status).toBe('DELIVERED');
+    expect(globalEvent.deliveryStats.deliveredCount).toBe(2);
+    expect(receivedUserA).toContain('Global realtime test');
+    expect(receivedUserB).toContain('Global realtime test');
+
+    // 2. Publish Targeted Event -> Only User A receives it, User B does NOT
+    receivedUserA = null;
+    receivedUserB = null;
+
+    const targetedEvent = ServerEventStore.publishEvent({
+      eventType: 'pami.notification',
+      createdBy: 'Lead Engineer',
+      environment: 'DEVELOPMENT',
+      targetType: 'SPECIFIC_USER',
+      targetId: 'user-a',
+      payload: { message: 'Targeted test for User A only', mascotState: 'encouraging' },
+      priority: 'HIGH',
+      expiresAt: new Date(Date.now() + 86400000).toISOString(),
+    });
+
+    expect(targetedEvent.deliveryStats.deliveredCount).toBe(1);
+    expect(receivedUserA).toContain('Targeted test for User A only');
+    expect(receivedUserB).toBeNull();
+
+    // 3. Persistent Inboxes across Page Refresh
+    const persistentNotifsA = ServerEventStore.getActiveNotificationsForUser('user-a');
+    expect(persistentNotifsA.length).toBeGreaterThanOrEqual(2);
+    expect(persistentNotifsA.some(n => n.message.includes('Targeted test'))).toBe(true);
+
+    const persistentNotifsB = ServerEventStore.getActiveNotificationsForUser('user-b');
+    expect(persistentNotifsB.some(n => n.message.includes('Targeted test'))).toBe(false);
+
+    // Cleanup
+    unregisterA();
+    unregisterB();
   });
 });

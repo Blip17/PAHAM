@@ -13,7 +13,8 @@ import {
   Zap
 } from 'lucide-react';
 import { liveRemoteService, LiveBroadcastPayload } from '../../dev/services/liveRemoteService';
-import { PahamMascot } from '../mascot/PahamMascot';
+import { realtimeClient } from '../../services/realtime/realtimeClient';
+import { PahamMascot, MascotState } from '../mascot/PahamMascot';
 
 // Web Audio API chime synthesis for surprise alerts
 function playChimeSound() {
@@ -42,10 +43,49 @@ function playChimeSound() {
 
 export const TopLiveAnnouncementBubble: React.FC = () => {
   const [broadcast, setBroadcast] = useState<LiveBroadcastPayload | null>(null);
+  const [activeNotifId, setActiveNotifId] = useState<string | null>(null);
   const [isVisible, setIsVisible] = useState<boolean>(false);
 
   useEffect(() => {
-    const unsub = liveRemoteService.subscribe((payload) => {
+    // 1. Subscribe to Live Server SSE Push Events
+    const unsubServerNotif = realtimeClient.subscribe('pami.notification', (serverEvent) => {
+      const payload = serverEvent.payload || {};
+      const displayMode = payload.displayMode || 'BOTH';
+
+      if (displayMode === 'TOP_BANNER' || displayMode === 'BOTH') {
+        const mascotExpr: MascotState = payload.mascotState || payload.expression || 'happy';
+        const msg = payload.message || 'Halo! Piko menyapamu!';
+        const dur = payload.durationSeconds !== undefined ? Number(payload.durationSeconds) : 10;
+        const playSound = payload.playSound !== false;
+
+        setBroadcast({
+          id: serverEvent.eventId || `server_${Date.now()}`,
+          expression: mascotExpr,
+          message: msg,
+          displayMode,
+          durationSeconds: dur,
+          playSound,
+          senderName: serverEvent.createdBy || payload.senderName || 'Piko AI',
+          timestamp: serverEvent.createdAt || new Date().toISOString(),
+        });
+        setActiveNotifId(serverEvent.id || serverEvent.eventId || null);
+        setIsVisible(true);
+
+        if (playSound) {
+          playChimeSound();
+        }
+
+        if (dur > 0) {
+          const timer = setTimeout(() => {
+            setIsVisible(false);
+          }, dur * 1000);
+          return () => clearTimeout(timer);
+        }
+      }
+    });
+
+    // 2. Subscribe to local BroadcastChannel fallback
+    const unsubLocal = liveRemoteService.subscribe((payload) => {
       if (payload && (payload.displayMode === 'TOP_BANNER' || payload.displayMode === 'BOTH')) {
         setBroadcast(payload);
         setIsVisible(true);
@@ -54,7 +94,6 @@ export const TopLiveAnnouncementBubble: React.FC = () => {
           playChimeSound();
         }
 
-        // Auto dismiss timer if duration > 0
         if (payload.durationSeconds > 0) {
           const timer = setTimeout(() => {
             setIsVisible(false);
@@ -66,8 +105,18 @@ export const TopLiveAnnouncementBubble: React.FC = () => {
       }
     });
 
-    return () => unsub();
+    return () => {
+      unsubServerNotif();
+      unsubLocal();
+    };
   }, []);
+
+  const handleDismiss = () => {
+    setIsVisible(false);
+    if (activeNotifId) {
+      realtimeClient.dismissNotification(activeNotifId);
+    }
+  };
 
   if (!isVisible || !broadcast) {
     return null;
@@ -130,7 +179,7 @@ export const TopLiveAnnouncementBubble: React.FC = () => {
             </div>
 
             <button
-              onClick={() => setIsVisible(false)}
+              onClick={handleDismiss}
               className="p-1 rounded-full opacity-60 hover:opacity-100 transition"
               aria-label="Tutup Pesan"
             >

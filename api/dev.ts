@@ -14,6 +14,43 @@ function applyCors(req: VercelRequest, res: VercelResponse): boolean {
   return false;
 }
 
+function sendJson(res: VercelResponse, statusCode: number, data: any) {
+  if (!res.headersSent) {
+    res.setHeader('Content-Type', 'application/json; charset=utf-8');
+  }
+  if (typeof (res as any).status === 'function') {
+    const r = (res as any).status(statusCode);
+    if (r && typeof r.json === 'function') {
+      return r.json(data);
+    }
+    if (r && typeof r.send === 'function') {
+      return r.send(JSON.stringify(data));
+    }
+  }
+  res.statusCode = statusCode;
+  return res.end(JSON.stringify(data));
+}
+
+function parseRequestBody(req: VercelRequest): any {
+  if (!req.body) return {};
+  if (typeof req.body === 'object' && !Buffer.isBuffer(req.body)) return req.body;
+  if (Buffer.isBuffer(req.body)) {
+    try {
+      return JSON.parse(req.body.toString('utf8'));
+    } catch {
+      return {};
+    }
+  }
+  if (typeof req.body === 'string') {
+    try {
+      return JSON.parse(req.body);
+    } catch {
+      return {};
+    }
+  }
+  return {};
+}
+
 function verifyDevAuth(req: VercelRequest): boolean {
   const authHeader = req.headers.authorization || '';
   const customDevToken = (req.headers['x-dev-token'] as string) || '';
@@ -27,19 +64,20 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (applyCors(req, res)) return;
 
   if (!verifyDevAuth(req)) {
-    return res.status(401).json({
+    return sendJson(res, 401, {
       success: false,
       errorCategory: 'UNAUTHORIZED',
       message: 'Unauthorized developer token.',
     });
   }
 
-  const action = (req.query?.action as string) || 'telemetry';
+  const body = parseRequestBody(req);
+  const action = (req.query?.action as string) || body.action || 'telemetry';
   const requestId = `req_dev_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
 
   try {
     if (action === 'telemetry') {
-      return res.status(200).json({
+      return sendJson(res, 200, {
         success: true,
         environment: process.env.VERCEL_ENV || 'PRODUCTION',
         system: {
@@ -58,14 +96,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       });
     }
 
-    return res.status(200).json({
+    return sendJson(res, 200, {
       success: true,
       message: 'PAHAM Developer API Active.',
       requestId,
       timestamp: new Date().toISOString(),
     });
   } catch (err: any) {
-    return res.status(500).json({
+    return sendJson(res, 500, {
       success: false,
       errorCategory: 'INTERNAL_ERROR',
       message: err?.message || 'Server error',

@@ -71,6 +71,49 @@ function applyCors(req: VercelRequest, res: VercelResponse): boolean {
 }
 
 /**
+ * Sends JSON response safely across all Vercel Node runtimes and test mocks
+ */
+function sendJson(res: VercelResponse, statusCode: number, data: any) {
+  if (!res.headersSent) {
+    res.setHeader('Content-Type', 'application/json; charset=utf-8');
+  }
+  if (typeof (res as any).status === 'function') {
+    const r = (res as any).status(statusCode);
+    if (r && typeof r.json === 'function') {
+      return r.json(data);
+    }
+    if (r && typeof r.send === 'function') {
+      return r.send(JSON.stringify(data));
+    }
+  }
+  res.statusCode = statusCode;
+  return res.end(JSON.stringify(data));
+}
+
+/**
+ * Safely parses request body from object, string, or Buffer
+ */
+function parseRequestBody(req: VercelRequest): any {
+  if (!req.body) return {};
+  if (typeof req.body === 'object' && !Buffer.isBuffer(req.body)) return req.body;
+  if (Buffer.isBuffer(req.body)) {
+    try {
+      return JSON.parse(req.body.toString('utf8'));
+    } catch {
+      return {};
+    }
+  }
+  if (typeof req.body === 'string') {
+    try {
+      return JSON.parse(req.body);
+    } catch {
+      return {};
+    }
+  }
+  return {};
+}
+
+/**
  * Detects current environment
  */
 function getEnvironment(): PahamEnvironment {
@@ -160,13 +203,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (applyCors(req, res)) return;
 
   const requestId = `req_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
-  const action = (req.query?.action as string) || (req.body?.action as string) || (req.method === 'POST' ? 'publish' : 'list');
+  const body = parseRequestBody(req);
+  const action = (req.query?.action as string) || body.action || (req.method === 'POST' ? 'publish' : 'list');
 
   try {
     // ── HEALTH CHECK ────────────────────────────────────────────────────────
     if (action === 'health' || req.query?.health === 'true') {
       const currentEnv = getEnvironment();
-      return res.status(200).json({
+      return sendJson(res, 200, {
         status: 'HEALTHY',
         auth: 'OK',
         database: 'OK',
@@ -182,7 +226,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     // ── INBOX (GET) ─────────────────────────────────────────────────────────
     if (action === 'inbox') {
-      const userId = (req.query?.userId as string) || (req.body?.userId as string) || 'guest-anonymous';
+      const userId = (req.query?.userId as string) || body.userId || 'guest-anonymous';
       const now = Date.now();
       
       const notifications = (globalThis.__paham_prod_notifications || []).filter(n => {
@@ -192,7 +236,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         return isTargetMatch && isNotDismissed && isNotExpired;
       });
 
-      return res.status(200).json({
+      return sendJson(res, 200, {
         success: true,
         userId: String(userId),
         notifications,
@@ -204,13 +248,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     // ── DISMISS (POST) ──────────────────────────────────────────────────────
     if (action === 'dismiss') {
-      const { notificationId } = req.body || {};
+      const { notificationId } = body;
       const notif = (globalThis.__paham_prod_notifications || []).find(n => n.id === notificationId || n.eventId === notificationId);
       if (notif) {
         notif.status = 'DISMISSED';
         notif.dismissedAt = new Date().toISOString();
       }
-      return res.status(200).json({
+      return sendJson(res, 200, {
         success: true,
         notificationId,
         message: 'Notification marked as dismissed.',
@@ -223,7 +267,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (action === 'publish' || req.method === 'POST') {
       const auth = verifyDevAuth(req);
       if (!auth.isAuthorized) {
-        return res.status(401).json({
+        return sendJson(res, 401, {
           success: false,
           errorCategory: 'UNAUTHORIZED',
           message: auth.error || 'Unauthorized developer token.',
@@ -238,10 +282,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         payload = {},
         priority = 'NORMAL',
         expiresInHours = 24,
-      } = req.body || {};
+      } = body;
 
       if (!eventType) {
-        return res.status(400).json({
+        return sendJson(res, 400, {
           success: false,
           errorCategory: 'VALIDATION_ERROR',
           message: 'eventType is required.',
@@ -299,7 +343,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         globalThis.__paham_prod_notifications!.pop();
       }
 
-      return res.status(200).json({
+      return sendJson(res, 200, {
         success: true,
         environment: auth.environment,
         event: newEvent,
@@ -314,7 +358,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (action === 'list' || req.method === 'GET') {
       const auth = verifyDevAuth(req);
       if (!auth.isAuthorized) {
-        return res.status(401).json({
+        return sendJson(res, 401, {
           success: false,
           errorCategory: 'UNAUTHORIZED',
           message: auth.error || 'Unauthorized developer token.',
@@ -325,7 +369,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       const limit = Number(req.query?.limit || 100);
       const events = (globalThis.__paham_prod_events || []).slice(0, limit);
 
-      return res.status(200).json(sanitizeDevPayload({
+      return sendJson(res, 200, sanitizeDevPayload({
         success: true,
         environment: auth.environment,
         events,
@@ -335,7 +379,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       }));
     }
 
-    return res.status(400).json({
+    return sendJson(res, 400, {
       success: false,
       errorCategory: 'UNKNOWN_ACTION',
       message: `Unknown action: "${action}". Supported actions: health, inbox, publish, list, dismiss.`,
@@ -343,7 +387,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     });
 
   } catch (err: any) {
-    return res.status(500).json({
+    return sendJson(res, 500, {
       success: false,
       errorCategory: 'INTERNAL_SERVER_ERROR',
       message: err?.message || 'Internal server error.',

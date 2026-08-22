@@ -7,37 +7,7 @@ import url from 'url';
 
 import unifiedEventsHandler from '../../../api/events';
 import unifiedDevHandler from '../../../api/dev';
-import publishHandler from '../../../api/events/publish';
-import streamHandler from '../../../api/events/stream';
-import inboxHandler from '../../../api/events/inbox';
-import listHandler from '../../../api/events/list';
-import authHandler from '../../../api/dev/auth';
-import telemetryHandler from '../../../api/dev/telemetry';
-import databaseHandler from '../../../api/dev/database';
-import devEventsHandler from '../../../api/dev/events';
-import flagsHandler from '../../../api/dev/flags';
-import aiLogsHandler from '../../../api/dev/ai-logs';
-import recommendationsHandler from '../../../api/dev/recommendations';
-import securityHandler from '../../../api/dev/security';
-import replayHandler from '../../../api/dev/replay';
-
-const routes: Record<string, (req: any, res: any) => any> = {
-  '/api/events': unifiedEventsHandler,
-  '/api/dev': unifiedDevHandler,
-  '/api/events/publish': publishHandler,
-  '/api/events/stream': streamHandler,
-  '/api/events/inbox': inboxHandler,
-  '/api/events/list': listHandler,
-  '/api/dev/auth': authHandler,
-  '/api/dev/telemetry': telemetryHandler,
-  '/api/dev/database': databaseHandler,
-  '/api/dev/events': devEventsHandler,
-  '/api/dev/flags': flagsHandler,
-  '/api/dev/ai-logs': aiLogsHandler,
-  '/api/dev/recommendations': recommendationsHandler,
-  '/api/dev/security': securityHandler,
-  '/api/dev/replay': replayHandler,
-};
+import aiHandler from '../../../api/ai';
 
 export function localApiDevPlugin(): Plugin {
   return {
@@ -51,7 +21,15 @@ export function localApiDevPlugin(): Plugin {
         const parsedUrl = url.parse(req.url, true);
         const pathname = parsedUrl.pathname || '';
 
-        const handler = routes[pathname];
+        let handler: any = null;
+        if (pathname.startsWith('/api/events')) {
+          handler = unifiedEventsHandler;
+        } else if (pathname.startsWith('/api/dev')) {
+          handler = unifiedDevHandler;
+        } else if (pathname.startsWith('/api/ai')) {
+          handler = aiHandler;
+        }
+
         if (!handler) {
           return next();
         }
@@ -74,6 +52,12 @@ export function localApiDevPlugin(): Plugin {
         const vReq = req as any;
         vReq.query = parsedUrl.query || {};
 
+        // If path has subaction (e.g. /api/events/publish -> action: 'publish')
+        const segments = pathname.split('/').filter(Boolean);
+        if (segments.length >= 3 && !vReq.query.action) {
+          vReq.query.action = segments[2];
+        }
+
         // Parse request body for POST/PUT
         if (req.method === 'POST' || req.method === 'PUT' || req.method === 'PATCH') {
           let rawBody = '';
@@ -85,6 +69,12 @@ export function localApiDevPlugin(): Plugin {
               vReq.body = rawBody ? JSON.parse(rawBody) : {};
             } catch {
               vReq.body = rawBody;
+            }
+
+            if (segments.length >= 3 && !vReq.body?.action) {
+              if (typeof vReq.body === 'object') {
+                vReq.body.action = segments[2];
+              }
             }
 
             try {

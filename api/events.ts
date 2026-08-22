@@ -118,7 +118,7 @@ function verifyDevAuth(req: VercelRequest): { isAuthorized: boolean; environment
 /**
  * Recursively redacts secrets and API keys
  */
-function sanitizeDevPayload<T>(obj: T): T {
+export function sanitizeDevPayload<T>(obj: T): T {
   if (obj === null || obj === undefined) return obj;
 
   if (typeof obj === 'string') {

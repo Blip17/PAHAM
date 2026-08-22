@@ -1,9 +1,4 @@
-// Serverless Endpoint: GET/POST /api/dev/replay
-// Backend Replay Studio Engine: reproduces learning journeys and inspects state time-travel
-
-import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { requireDevAuth, sanitizeDevPayload } from './_auth';
-
+// Replay Studio Preset Data & Types
 export interface ReplayStep {
   stepIndex: number;
   stageName: string;
@@ -222,41 +217,3 @@ export const REPLAY_JOURNEYS: Record<string, ReplayJourneyPreset> = {
     ],
   },
 };
-
-export default async function handler(req: VercelRequest, res: VercelResponse) {
-  const auth = requireDevAuth(req, res);
-  if (!auth) return;
-
-  if (req.method === 'GET') {
-    const { journeyId = 'STRUGGLING_STUDENT_RESCUE', stepIndex } = req.query;
-
-    const journey = REPLAY_JOURNEYS[journeyId as string] || REPLAY_JOURNEYS.STRUGGLING_STUDENT_RESCUE;
-
-    if (stepIndex !== undefined) {
-      const step = journey.steps.find(s => s.stepIndex === Number(stepIndex));
-      return res.status(200).json(sanitizeDevPayload({
-        success: true,
-        environment: auth.environment,
-        journeyId: journey.id,
-        step: step || journey.steps[0],
-        timestamp: new Date().toISOString(),
-      }));
-    }
-
-    return res.status(200).json(sanitizeDevPayload({
-      success: true,
-      environment: auth.environment,
-      availableJourneys: Object.values(REPLAY_JOURNEYS).map(j => ({
-        id: j.id,
-        title: j.title,
-        description: j.description,
-        totalSteps: j.steps.length,
-        syntheticUser: j.syntheticUser,
-      })),
-      activeJourney: journey,
-      timestamp: new Date().toISOString(),
-    }));
-  }
-
-  return res.status(405).json({ error: 'Method Not Allowed' });
-}

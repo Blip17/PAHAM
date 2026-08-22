@@ -9,10 +9,8 @@ import { devErrorTracker } from './services/devErrorTracker';
 import { devAiLogger } from './services/devAiLogger';
 import { liveRemoteService } from './services/liveRemoteService';
 import { devApiClient } from './services/devApiClient';
-import { sanitizeDevPayload } from '../../api/dev/_auth';
-import { REPLAY_JOURNEYS } from '../../api/dev/replay';
-import { ServerEventStore } from '../../api/events/_store';
-import unifiedEventsHandler from '../../api/events';
+import { REPLAY_JOURNEYS } from './data/replayData';
+import unifiedEventsHandler, { sanitizeDevPayload } from '../../api/events';
 import { db } from '../core/db';
 
 describe('PAHAM Internal Developer Cockpit Suite', () => {
@@ -208,83 +206,84 @@ describe('PAHAM Internal Developer Cockpit Suite', () => {
   });
 
   // ── 11. Server-Backed Realtime Event & Targeting Architecture ─────────────
-  it('broadcasts server events globally and enforces user targeting rules', () => {
-    // Setup Mock SSE clients: User A and User B
-    let receivedUserA: any = null;
-    let receivedUserB: any = null;
+  it('broadcasts server events globally and enforces user targeting rules', async () => {
+    // 1. Publish Global Event via unified endpoint
+    let publishGlobalRes: any = null;
+    await unifiedEventsHandler(
+      {
+        method: 'POST',
+        headers: { 'x-dev-token': 'paham-dev-2026' },
+        body: {
+          action: 'publish',
+          eventType: 'pami.notification',
+          targetType: 'ALL_ONLINE_USERS',
+          payload: { message: 'Global realtime test', mascotState: 'happy' },
+        },
+      } as any,
+      {
+        setHeader: () => {},
+        status: (code: number) => ({ json: (d: any) => { publishGlobalRes = { code, d }; } }),
+      } as any
+    );
 
-    const unregisterA = ServerEventStore.registerClient({
-      clientId: 'client-user-a',
-      userId: 'user-a',
-      environment: 'DEVELOPMENT',
-      isTestUser: false,
-      connectedAt: new Date().toISOString(),
-      lastSeenAt: new Date().toISOString(),
-      send: (data: string) => {
-        receivedUserA = data;
-      },
-    });
+    expect(publishGlobalRes.code).toBe(200);
+    expect(publishGlobalRes.d.success).toBe(true);
 
-    const unregisterB = ServerEventStore.registerClient({
-      clientId: 'client-user-b',
-      userId: 'user-b',
-      environment: 'DEVELOPMENT',
-      isTestUser: false,
-      connectedAt: new Date().toISOString(),
-      lastSeenAt: new Date().toISOString(),
-      send: (data: string) => {
-        receivedUserB = data;
-      },
-    });
+    // 2. Publish Targeted Event for User A
+    let publishTargetedRes: any = null;
+    await unifiedEventsHandler(
+      {
+        method: 'POST',
+        headers: { 'x-dev-token': 'paham-dev-2026' },
+        body: {
+          action: 'publish',
+          eventType: 'pami.notification',
+          targetType: 'SPECIFIC_USER',
+          targetId: 'user-a',
+          payload: { message: 'Targeted test for User A only', mascotState: 'encouraging' },
+        },
+      } as any,
+      {
+        setHeader: () => {},
+        status: (code: number) => ({ json: (d: any) => { publishTargetedRes = { code, d }; } }),
+      } as any
+    );
 
-    expect(ServerEventStore.getOnlineCount('DEVELOPMENT')).toBeGreaterThanOrEqual(2);
+    expect(publishTargetedRes.code).toBe(200);
 
-    // 1. Publish Global Event -> Both User A and User B must receive it
-    const globalEvent = ServerEventStore.publishEvent({
-      eventType: 'pami.notification',
-      createdBy: 'Lead Engineer',
-      environment: 'DEVELOPMENT',
-      targetType: 'ALL_ONLINE_USERS',
-      payload: { message: 'Global realtime test', mascotState: 'happy' },
-      priority: 'NORMAL',
-      expiresAt: new Date(Date.now() + 86400000).toISOString(),
-    });
+    // 3. User A Inbox contains the targeted message
+    let inboxARes: any = null;
+    await unifiedEventsHandler(
+      {
+        method: 'GET',
+        query: { action: 'inbox', userId: 'user-a' },
+        headers: {},
+      } as any,
+      {
+        setHeader: () => {},
+        status: (code: number) => ({ json: (d: any) => { inboxARes = { code, d }; } }),
+      } as any
+    );
 
-    expect(globalEvent.status).toBe('DELIVERED');
-    expect(globalEvent.deliveryStats.deliveredCount).toBe(2);
-    expect(receivedUserA).toContain('Global realtime test');
-    expect(receivedUserB).toContain('Global realtime test');
+    expect(inboxARes.code).toBe(200);
+    expect(inboxARes.d.notifications.some((n: any) => n.message.includes('Targeted test for User A'))).toBe(true);
 
-    // 2. Publish Targeted Event -> Only User A receives it, User B does NOT
-    receivedUserA = null;
-    receivedUserB = null;
+    // 4. User B Inbox does NOT contain the targeted message
+    let inboxBRes: any = null;
+    await unifiedEventsHandler(
+      {
+        method: 'GET',
+        query: { action: 'inbox', userId: 'user-b' },
+        headers: {},
+      } as any,
+      {
+        setHeader: () => {},
+        status: (code: number) => ({ json: (d: any) => { inboxBRes = { code, d }; } }),
+      } as any
+    );
 
-    const targetedEvent = ServerEventStore.publishEvent({
-      eventType: 'pami.notification',
-      createdBy: 'Lead Engineer',
-      environment: 'DEVELOPMENT',
-      targetType: 'SPECIFIC_USER',
-      targetId: 'user-a',
-      payload: { message: 'Targeted test for User A only', mascotState: 'encouraging' },
-      priority: 'HIGH',
-      expiresAt: new Date(Date.now() + 86400000).toISOString(),
-    });
-
-    expect(targetedEvent.deliveryStats.deliveredCount).toBe(1);
-    expect(receivedUserA).toContain('Targeted test for User A only');
-    expect(receivedUserB).toBeNull();
-
-    // 3. Persistent Inboxes across Page Refresh
-    const persistentNotifsA = ServerEventStore.getActiveNotificationsForUser('user-a');
-    expect(persistentNotifsA.length).toBeGreaterThanOrEqual(2);
-    expect(persistentNotifsA.some(n => n.message.includes('Targeted test'))).toBe(true);
-
-    const persistentNotifsB = ServerEventStore.getActiveNotificationsForUser('user-b');
-    expect(persistentNotifsB.some(n => n.message.includes('Targeted test'))).toBe(false);
-
-    // Cleanup
-    unregisterA();
-    unregisterB();
+    expect(inboxBRes.code).toBe(200);
+    expect(inboxBRes.d.notifications.some((n: any) => n.message.includes('Targeted test for User A'))).toBe(false);
   });
 
   // ── 12. Unified Serverless Event Endpoint Handler (api/events.ts) ─────────

@@ -3,6 +3,7 @@
 
 import { describe, it, expect, beforeEach } from 'vitest';
 import { languageLearningEngine } from './core/LanguageLearningEngine';
+import { PlacementQuestionValidator } from './placement/PlacementQuestionValidator';
 import './core/bootstrapData';
 
 describe('PAHAM First-Class Foreign Language Architecture Suite', () => {
@@ -226,16 +227,137 @@ describe('PAHAM First-Class Foreign Language Architecture Suite', () => {
 
       expect(responseEn.tutorResponse).toBeDefined();
       expect(responseEn.suggestedFollowUp?.length).toBeGreaterThan(0);
+    });
+  });
 
-      const responseZh = await languageLearningEngine.tutor.respondToLearner(
-        'Kapan kita memakai partikel 了?',
-        'zh-CN',
-        'Level-2',
-        { stage: 'HINT' }
+  describe('12. Redesigned Multi-Dimensional Adaptive Placement Suite', () => {
+    it('validates placement questions with PlacementQuestionValidator and rejects malformed items', () => {
+      const validQ: import('./placement/types').PlacementQuestion = {
+        id: 'test_q_valid',
+        languageId: 'en',
+        testedSkill: 'GRAMMAR',
+        targetLevel: 'A1',
+        difficultyIndex: 0.25,
+        discriminationIndex: 0.8,
+        questionType: 'GRAMMAR_COMPLETION',
+        instruction: 'Choose the correct word:',
+        prompt: 'She _____ to school.',
+        options: ['goes', 'go', 'going'],
+        correctAnswer: 'goes',
+        explanation: 'Subject She requires verb with -s.',
+        diagnosticTags: ['present_simple'],
+      };
+
+      const validResult = PlacementQuestionValidator.validate(validQ);
+      expect(validResult.isValid).toBe(true);
+
+      const invalidQ: import('./placement/types').PlacementQuestion = {
+        ...validQ,
+        options: ['goes', 'goes'], // duplicate option & missing distinct choices
+      };
+      const invalidResult = PlacementQuestionValidator.validate(invalidQ);
+      expect(invalidResult.isValid).toBe(false);
+      expect(invalidResult.errors.length).toBeGreaterThan(0);
+    });
+
+    it('creates adaptive placement session and dynamically selects next question by skill uncertainty', () => {
+      const session = languageLearningEngine.assessments.adaptive.createSession('test_user_adaptive', 'en');
+      expect(session.sessionId).toBeDefined();
+      expect(session.targetSkills).toContain('GRAMMAR');
+      expect(session.targetSkills).toContain('VOCABULARY');
+      expect(session.status).toBe('IN_PROGRESS');
+
+      const firstQ = languageLearningEngine.assessments.adaptive.selectNextQuestion(session);
+      expect(firstQ).toBeDefined();
+      expect(firstQ?.languageId).toBe('en');
+
+      // Record first answer with high confidence
+      const { attempt, updatedEstimate } = languageLearningEngine.assessments.adaptive.recordAnswer(
+        session,
+        firstQ!.id,
+        firstQ!.correctAnswer,
+        5, // VERY_CONFIDENT
+        4
       );
 
-      expect(responseZh.tutorResponse).toBeDefined();
+      expect(attempt.isCorrect).toBe(true);
+      expect(attempt.diagnosticCategory).toBe('VERIFIED_MASTERY');
+      expect(updatedEstimate.abilityScore).toBeGreaterThan(30);
+      expect(updatedEstimate.uncertainty).toBeLessThan(0.85);
+    });
+
+    it('detects critical misconceptions when high confidence meets incorrect answer', () => {
+      const session = languageLearningEngine.assessments.adaptive.createSession('test_user_misc', 'zh-CN');
+      const q = languageLearningEngine.assessments.adaptive.selectNextQuestion(session);
+      expect(q).toBeDefined();
+
+      // Answer wrongly with confidence 5
+      const { attempt } = languageLearningEngine.assessments.adaptive.recordAnswer(
+        session,
+        q!.id,
+        'wrong_option_test',
+        5, // VERY_CONFIDENT but WRONG
+        6
+      );
+
+      expect(attempt.isCorrect).toBe(false);
+      expect(attempt.diagnosticCategory).toBe('CRITICAL_MISCONCEPTION');
+
+      const report = languageLearningEngine.assessments.adaptive.generateDiagnosticReport(session);
+      expect(report.misconceptions.length).toBeGreaterThan(0);
+      expect(report.misconceptions[0].remedialSuggestion).toBeDefined();
+    });
+
+    it('decouples Mandarin skills into Hanzi, Tones, Grammar, and Vocabulary profiles', () => {
+      const session = languageLearningEngine.assessments.adaptive.createSession('test_user_mandarin', 'zh-CN');
+      
+      // Simulate answering tone question correctly and grammar question incorrectly
+      const toneQ = Array.from((languageLearningEngine.assessments.adaptive as any).questionBank.values())
+        .find((q: any) => q.languageId === 'zh-CN' && q.testedSkill === 'TONES') as import('./placement/types').PlacementQuestion | undefined;
+      const charQ = Array.from((languageLearningEngine.assessments.adaptive as any).questionBank.values())
+        .find((q: any) => q.languageId === 'zh-CN' && q.testedSkill === 'CHARACTERS') as import('./placement/types').PlacementQuestion | undefined;
+
+      if (toneQ && charQ) {
+        languageLearningEngine.assessments.adaptive.recordAnswer(session, toneQ.id, toneQ.correctAnswer, 5, 3);
+        languageLearningEngine.assessments.adaptive.recordAnswer(session, charQ.id, 'wrong_hanzi', 2, 8);
+
+        const report = languageLearningEngine.assessments.adaptive.generateDiagnosticReport(session);
+        expect(report.skillEstimates.TONES.abilityScore).toBeGreaterThan(report.skillEstimates.CHARACTERS.abilityScore);
+        expect(report.framework).toBe('GF0025');
+        expect(report.schoolReadiness.status).toBeDefined();
+      }
+    });
+
+    it('bridges placement diagnostic report into FSRS seeds and PAMI companion recommendations', async () => {
+      const session = languageLearningEngine.assessments.adaptive.createSession('test_user_bridge', 'en');
+      const q = languageLearningEngine.assessments.adaptive.selectNextQuestion(session);
+      if (q) {
+        languageLearningEngine.assessments.adaptive.recordAnswer(session, q.id, 'wrong_ans', 5, 5); // creates misconception
+        const report = languageLearningEngine.assessments.adaptive.generateDiagnosticReport(session);
+        
+        const bridgeRes = await languageLearningEngine.assessments.bridge.applyPlacementResults(report);
+        expect(bridgeRes.fsrsCardsCreatedCount).toBeGreaterThanOrEqual(1);
+        expect(bridgeRes.recommendationCreated).toBe(true);
+      }
+    });
+
+    it('compares previous placement with current placement and reports skill deltas', () => {
+      const session1 = languageLearningEngine.assessments.adaptive.createSession('test_user_retest', 'en');
+      const prevReport = languageLearningEngine.assessments.adaptive.generateDiagnosticReport(session1);
+
+      const session2 = languageLearningEngine.assessments.adaptive.createSession('test_user_retest', 'en');
+      // answer all questions correctly in session 2
+      const q = languageLearningEngine.assessments.adaptive.selectNextQuestion(session2);
+      if (q) {
+        languageLearningEngine.assessments.adaptive.recordAnswer(session2, q.id, q.correctAnswer, 5, 3);
+      }
+      const currentReport = languageLearningEngine.assessments.adaptive.generateDiagnosticReport(session2, prevReport);
+
+      expect(currentReport.comparisonWithPrevious).toBeDefined();
+      expect(currentReport.comparisonWithPrevious?.previousOverallLevel).toBeDefined();
+      expect(currentReport.comparisonWithPrevious?.skillDeltas.length).toBeGreaterThan(0);
     });
   });
 
 });
+

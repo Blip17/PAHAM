@@ -583,7 +583,7 @@ export const MandarinHubView: React.FC<MandarinHubViewProps> = ({ onBack }) => {
         isOpen={isAssessmentModalOpen}
         onClose={() => setIsAssessmentModalOpen(false)}
         languageId="zh-CN"
-        onAssessmentCompleted={res => setSelectedLevel(res.recommendedLevel)}
+        onAssessmentCompleted={report => setSelectedLevel(report.overallLevel)}
       />
 
     </div>

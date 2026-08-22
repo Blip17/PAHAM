@@ -439,7 +439,7 @@ export const EnglishHubView: React.FC<EnglishHubViewProps> = ({ onBack }) => {
         isOpen={isAssessmentModalOpen}
         onClose={() => setIsAssessmentModalOpen(false)}
         languageId="en"
-        onAssessmentCompleted={res => setSelectedLevel(res.recommendedLevel)}
+        onAssessmentCompleted={report => setSelectedLevel(report.overallLevel)}
       />
 
     </div>

@@ -1,5 +1,5 @@
 // Universal Diagnostic Assessment Engine for PAHAM Language Architecture
-// Diagnostic placement testing and multi-dimensional skill evaluation
+// Coordinates multi-dimensional adaptive placement, IRT ability estimation, and learning path integration
 
 import {
   SupportedLanguageId,
@@ -9,8 +9,16 @@ import {
 } from './types';
 import { exerciseEngine } from './ExerciseEngine';
 import { languageRegistry } from './LanguageRegistry';
+import { adaptivePlacementEngine } from '../placement/AdaptivePlacementEngine';
+import { PlacementStorage } from '../placement/PlacementStorage';
+import { PlacementLearningPathBridge } from '../placement/PlacementLearningPathBridge';
+import { PlacementDiagnosticReport } from '../placement/types';
 
 export class AssessmentEngine {
+  public adaptive = adaptivePlacementEngine;
+  public storage = PlacementStorage;
+  public bridge = PlacementLearningPathBridge;
+
   /**
    * Generate a balanced diagnostic placement test for a language
    */
@@ -21,7 +29,7 @@ export class AssessmentEngine {
     const levels = lang.levelIds;
     const testItems: UniversalExercise[] = [];
 
-    // Collect 2-3 questions from each proficiency level across core skills
+    // Collect questions from each proficiency level across core skills
     levels.forEach(lvl => {
       const available = exerciseEngine.getExercises(languageId, lvl);
       const sample = available.slice(0, 3);

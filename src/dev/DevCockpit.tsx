@@ -23,7 +23,8 @@ import {
   Command,
   History,
   ShieldAlert,
-  Radio
+  Radio,
+  Globe
 } from 'lucide-react';
 import { DevCockpitTab } from './types';
 import { DevHomeView } from './views/DevHomeView';
@@ -42,6 +43,7 @@ import { SecurityCenterView } from './views/SecurityCenterView';
 import { ApiExplorerView } from './views/ApiExplorerView';
 import { JobMonitorView } from './views/JobMonitorView';
 import { AuditLogView } from './views/AuditLogView';
+import { LanguageDevView } from '../languages/dev/LanguageDevView';
 import { DevCommandPalette } from './components/DevCommandPalette';
 import { devApiClient, PahamEnvironment, LiveTelemetryResponse } from './services/devApiClient';
 import { devStreamService } from './services/devStreamService';
@@ -193,6 +195,7 @@ export const DevCockpit: React.FC<DevCockpitProps> = ({
     {
       groupName: 'INFERENCE & CONFIG',
       items: [
+        { id: 'languages', label: 'Languages Engine', icon: <Globe className="w-4 h-4 text-blue-400" />, badge: 'CEFR/GF0025' },
         { id: 'ai', label: 'AI Debugger', icon: <Zap className="w-4 h-4 text-emerald-400" /> },
         { id: 'api', label: 'API Explorer', icon: <Terminal className="w-4 h-4 text-blue-400" /> },
         { id: 'flags', label: 'Feature Flags', icon: <Sliders className="w-4 h-4 text-blue-400" /> },
@@ -341,6 +344,7 @@ export const DevCockpit: React.FC<DevCockpitProps> = ({
             {activeTab === 'security' && <SecurityCenterView />}
             {activeTab === 'api' && <ApiExplorerView />}
             {activeTab === 'jobs' && <JobMonitorView />}
+            {activeTab === 'languages' && <LanguageDevView />}
             {activeTab === 'audit' && <AuditLogView />}
           </div>
         </main>

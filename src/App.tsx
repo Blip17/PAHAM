@@ -22,6 +22,8 @@ import { TopLiveAnnouncementBubble } from './components/companion/TopLiveAnnounc
 import { RealtimeProvider } from './services/realtime/RealtimeProvider';
 import { GuardianDashboard } from './guardian/GuardianDashboard';
 import { DevCockpit } from './dev/DevCockpit';
+import { LanguageHubView } from './languages/views/LanguageHubView';
+import './languages/core/bootstrapData';
 // Entry experience
 import { EntryView } from './entry/EntryView';
 import { AuthPanel } from './entry/AuthPanel';
@@ -364,6 +366,9 @@ export function App() {
                   onFinishSession={() => setActiveTab('home')}
                   onOpenTimer={handleOpenTimer}
                 />
+              )}
+              {activeTab === 'languages' && (
+                <LanguageHubView />
               )}
               {activeTab === 'quiz' && (
                 <QuizView

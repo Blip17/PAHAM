@@ -17,6 +17,7 @@ export type DevCockpitTab =
   | 'security'
   | 'api'
   | 'jobs'
+  | 'languages'
   | 'audit';
 
 export type SystemHealthStatus = 'HEALTHY' | 'WARNING' | 'ERROR' | 'OFFLINE';

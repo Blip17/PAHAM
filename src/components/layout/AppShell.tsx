@@ -18,7 +18,8 @@ import {
   GraduationCap, 
   Sparkles,
   Calendar,
-  ShieldCheck
+  ShieldCheck,
+  Globe
 } from 'lucide-react';
 import { db } from '../../core/db';
 import { UserProfile, DailyStudyPlan, Concept } from '../../core/types';
@@ -71,6 +72,7 @@ export const AppShell: React.FC<AppShellProps> = ({
   const desktopNavItems = [
     { id: 'home', label: 'Beranda', icon: Home },
     { id: 'learn', label: 'Belajar', icon: BookOpen },
+    { id: 'languages', label: 'Bahasa Asing', icon: Globe },
     { id: 'flashcards', label: 'Flashcards', icon: Layers },
     { id: 'schedule', label: 'Jadwal & Target', icon: Calendar },
     { id: 'materials', label: 'Materi', icon: FileText },

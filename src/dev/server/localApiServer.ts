@@ -5,6 +5,8 @@ import type { Plugin, ViteDevServer } from 'vite';
 import type { IncomingMessage, ServerResponse } from 'http';
 import url from 'url';
 
+import unifiedEventsHandler from '../../../api/events';
+import unifiedDevHandler from '../../../api/dev';
 import publishHandler from '../../../api/events/publish';
 import streamHandler from '../../../api/events/stream';
 import inboxHandler from '../../../api/events/inbox';
@@ -20,6 +22,8 @@ import securityHandler from '../../../api/dev/security';
 import replayHandler from '../../../api/dev/replay';
 
 const routes: Record<string, (req: any, res: any) => any> = {
+  '/api/events': unifiedEventsHandler,
+  '/api/dev': unifiedDevHandler,
   '/api/events/publish': publishHandler,
   '/api/events/stream': streamHandler,
   '/api/events/inbox': inboxHandler,

@@ -1,5 +1,7 @@
 // PAHAM Centralized Realtime Client
-// Connects to server-backed SSE event stream, manages reconnects, and dispatches server events
+// Connects to server-backed SSE event stream, Supabase Realtime Channels, and periodic inbox sync
+
+import { isSupabaseConfigured, supabase } from '../supabaseClient';
 
 export type RealtimeConnectionStatus = 'DISCONNECTED' | 'CONNECTING' | 'CONNECTED' | 'RECONNECTING' | 'ERROR';
 
@@ -20,6 +22,7 @@ export interface RealtimeServerEvent {
 
 class RealtimeClient {
   private eventSource: EventSource | null = null;
+  private supabaseChannel: any = null;
   private status: RealtimeConnectionStatus = 'DISCONNECTED';
   private listeners: Map<string, Set<EventCallback>> = new Map();
   private statusListeners: Set<(status: RealtimeConnectionStatus) => void> = new Set();
@@ -27,6 +30,7 @@ class RealtimeClient {
   private reconnectAttempts = 0;
   private reconnectTimer: any = null;
   private activePollingInterval: any = null;
+  private seenEventIds: Set<string> = new Set();
 
   public getStatus(): RealtimeConnectionStatus {
     return this.status;
@@ -68,9 +72,17 @@ class RealtimeClient {
   }
 
   /**
-   * Dispatch incoming server event to matching subscribers
+   * Dispatch incoming server event to matching subscribers with deduplication
    */
   public dispatch(eventType: string, eventData: any) {
+    const eventKey = eventData?.eventId || eventData?.id;
+    if (eventKey) {
+      if (this.seenEventIds.has(eventKey)) {
+        return; // Already processed
+      }
+      this.seenEventIds.add(eventKey);
+    }
+
     // Specific event listeners
     const specific = this.listeners.get(eventType);
     if (specific) {
@@ -89,40 +101,53 @@ class RealtimeClient {
   }
 
   /**
-   * Connect to server-sent events stream with user context
+   * Connect to server stream and persistent sync
    */
   public connect(userId = 'guest-anonymous') {
     this.currentUserId = userId || 'guest-anonymous';
 
     if (typeof window === 'undefined') return;
 
-    if (this.eventSource) {
-      this.eventSource.close();
-      this.eventSource = null;
-    }
-
     this.setStatus('CONNECTING');
 
+    // 1. Initialize Supabase Realtime Channel if configured
     try {
-      const url = `/api/events/stream?userId=${encodeURIComponent(this.currentUserId)}&env=${import.meta.env.PROD ? 'PRODUCTION' : 'DEVELOPMENT'}`;
+      if (isSupabaseConfigured && supabase) {
+        if (this.supabaseChannel) {
+          supabase.removeChannel(this.supabaseChannel);
+        }
+
+        this.supabaseChannel = supabase.channel('paham-global-broadcast')
+          .on('broadcast', { event: 'pami.notification' }, (payload: any) => {
+            this.dispatch('pami.notification', payload.payload || payload);
+          })
+          .on('broadcast', { event: 'pami.state_change' }, (payload: any) => {
+            this.dispatch('pami.state_change', payload.payload || payload);
+          })
+          .subscribe((status: string) => {
+            if (status === 'SUBSCRIBED') {
+              this.setStatus('CONNECTED');
+            }
+          });
+      }
+    } catch {}
+
+    // 2. Initialize SSE stream (with graceful error handling for serverless timeouts)
+    try {
+      if (this.eventSource) {
+        this.eventSource.close();
+        this.eventSource = null;
+      }
+
+      const url = `/api/events?action=stream&userId=${encodeURIComponent(this.currentUserId)}`;
       const es = new EventSource(url);
       this.eventSource = es;
 
       es.onopen = () => {
         this.reconnectAttempts = 0;
         this.setStatus('CONNECTED');
-        this.stopPollingFallback();
       };
 
-      // Listen for system handshake
-      es.addEventListener('system.handshake', (e: MessageEvent) => {
-        try {
-          const data = JSON.parse(e.data);
-          this.dispatch('system.handshake', data);
-        } catch {}
-      });
-
-      // Listen for Pami notifications
       es.addEventListener('pami.notification', (e: MessageEvent) => {
         try {
           const data = JSON.parse(e.data);
@@ -130,7 +155,6 @@ class RealtimeClient {
         } catch {}
       });
 
-      // Listen for Pami state changes
       es.addEventListener('pami.state_change', (e: MessageEvent) => {
         try {
           const data = JSON.parse(e.data);
@@ -138,84 +162,35 @@ class RealtimeClient {
         } catch {}
       });
 
-      // Listen for recommendations
-      es.addEventListener('recommendation.created', (e: MessageEvent) => {
-        try {
-          const data = JSON.parse(e.data);
-          this.dispatch('recommendation.created', data);
-        } catch {}
-      });
-
-      // Listen for general announcements
-      es.addEventListener('announcement.created', (e: MessageEvent) => {
-        try {
-          const data = JSON.parse(e.data);
-          this.dispatch('announcement.created', data);
-        } catch {}
-      });
-
-      // Listen for developer test events
-      es.addEventListener('developer.test_event', (e: MessageEvent) => {
-        try {
-          const data = JSON.parse(e.data);
-          this.dispatch('developer.test_event', data);
-        } catch {}
-      });
-
-      // Generic message handler
-      es.onmessage = (e: MessageEvent) => {
-        try {
-          const data = JSON.parse(e.data);
-          const type = data.eventType || 'message';
-          this.dispatch(type, data);
-        } catch {}
-      };
-
       es.onerror = () => {
-        this.setStatus('RECONNECTING');
+        // SSE closed or timed out by serverless gateway; persistent polling handles seamless delivery
         es.close();
         this.eventSource = null;
-        this.scheduleReconnect();
-        this.startPollingFallback();
       };
+    } catch {}
 
-    } catch {
-      this.setStatus('ERROR');
-      this.startPollingFallback();
-    }
+    // 3. Always maintain active inbox synchronization (every 3.5s) to guarantee delivery across serverless lambdas
+    this.startActiveSync();
   }
 
-  private scheduleReconnect() {
-    if (this.reconnectTimer) clearTimeout(this.reconnectTimer);
-    const delay = Math.min(1000 * Math.pow(2, this.reconnectAttempts), 15000);
-    this.reconnectAttempts++;
-
-    this.reconnectTimer = setTimeout(() => {
-      this.connect(this.currentUserId);
-    }, delay);
-  }
-
-  private seenEventIds: Set<string> = new Set();
-
-  /**
-   * Resilient polling fallback if SSE is disconnected or running on serverless
-   */
-  private startPollingFallback() {
+  private startActiveSync() {
     if (this.activePollingInterval) return;
 
-    this.activePollingInterval = setInterval(async () => {
-      try {
-        const notifs = await this.fetchInbox(this.currentUserId);
-        if (notifs && notifs.length > 0) {
-          notifs.forEach(notif => {
-            const notifKey = notif.id || notif.eventId;
-            if (notifKey && this.seenEventIds.has(notifKey)) {
-              return; // Already delivered
-            }
-            if (notifKey) {
-              this.seenEventIds.add(notifKey);
-            }
+    // Immediately trigger initial sync
+    this.syncInbox();
 
+    this.activePollingInterval = setInterval(() => {
+      this.syncInbox();
+    }, 3500);
+  }
+
+  private async syncInbox() {
+    try {
+      const notifs = await this.fetchInbox(this.currentUserId);
+      if (notifs && notifs.length > 0) {
+        notifs.forEach(notif => {
+          const notifKey = notif.id || notif.eventId;
+          if (notifKey && !this.seenEventIds.has(notifKey)) {
             this.dispatch(notif.eventType || 'pami.notification', {
               eventId: notif.eventId || notif.id,
               eventType: notif.eventType,
@@ -223,17 +198,13 @@ class RealtimeClient {
               payload: notif.payload,
               createdAt: notif.createdAt,
             });
-          });
-        }
-      } catch {}
-    }, 3500);
-  }
-
-  private stopPollingFallback() {
-    if (this.activePollingInterval) {
-      clearInterval(this.activePollingInterval);
-      this.activePollingInterval = null;
-    }
+          }
+        });
+      }
+      if (this.status !== 'CONNECTED') {
+        this.setStatus('CONNECTED');
+      }
+    } catch {}
   }
 
   public disconnect() {
@@ -241,11 +212,18 @@ class RealtimeClient {
       this.eventSource.close();
       this.eventSource = null;
     }
+    if (this.supabaseChannel && supabase) {
+      supabase.removeChannel(this.supabaseChannel);
+      this.supabaseChannel = null;
+    }
+    if (this.activePollingInterval) {
+      clearInterval(this.activePollingInterval);
+      this.activePollingInterval = null;
+    }
     if (this.reconnectTimer) {
       clearTimeout(this.reconnectTimer);
       this.reconnectTimer = null;
     }
-    this.stopPollingFallback();
     this.setStatus('DISCONNECTED');
   }
 
@@ -254,12 +232,23 @@ class RealtimeClient {
    */
   public async fetchInbox(userId = this.currentUserId): Promise<any[]> {
     try {
-      const res = await fetch(`/api/events/inbox?userId=${encodeURIComponent(userId)}`);
+      // Primary: Unified endpoint /api/events?action=inbox
+      const res = await fetch(`/api/events?action=inbox&userId=${encodeURIComponent(userId)}`);
       if (res.ok) {
         const data = await res.json();
         return data.notifications || [];
       }
     } catch {}
+
+    // Fallback: /api/events/inbox
+    try {
+      const fallbackRes = await fetch(`/api/events/inbox?userId=${encodeURIComponent(userId)}`);
+      if (fallbackRes.ok) {
+        const data = await fallbackRes.json();
+        return data.notifications || [];
+      }
+    } catch {}
+
     return [];
   }
 
@@ -268,7 +257,7 @@ class RealtimeClient {
    */
   public async dismissNotification(notificationId: string, userId = this.currentUserId): Promise<boolean> {
     try {
-      const res = await fetch('/api/events/inbox', {
+      const res = await fetch('/api/events?action=dismiss', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ notificationId, action: 'DISMISS', userId }),

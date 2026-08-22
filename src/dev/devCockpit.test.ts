@@ -12,6 +12,7 @@ import { devApiClient } from './services/devApiClient';
 import { sanitizeDevPayload } from '../../api/dev/_auth';
 import { REPLAY_JOURNEYS } from '../../api/dev/replay';
 import { ServerEventStore } from '../../api/events/_store';
+import unifiedEventsHandler from '../../api/events';
 import { db } from '../core/db';
 
 describe('PAHAM Internal Developer Cockpit Suite', () => {
@@ -284,5 +285,79 @@ describe('PAHAM Internal Developer Cockpit Suite', () => {
     // Cleanup
     unregisterA();
     unregisterB();
+  });
+
+  // ── 12. Unified Serverless Event Endpoint Handler (api/events.ts) ─────────
+  it('handles unified /api/events actions (health, inbox, publish, list)', async () => {
+    // 1. Health check action
+    let healthJsonResult: any = null;
+    const mockHealthReq: any = {
+      method: 'GET',
+      query: { action: 'health' },
+      headers: {},
+    };
+    const mockHealthRes: any = {
+      setHeader: () => {},
+      status: (code: number) => ({
+        json: (data: any) => {
+          healthJsonResult = { code, data };
+        },
+      }),
+    };
+
+    await unifiedEventsHandler(mockHealthReq, mockHealthRes);
+    expect(healthJsonResult).toBeDefined();
+    expect(healthJsonResult.code).toBe(200);
+    expect(healthJsonResult.data.status).toBe('HEALTHY');
+    expect(healthJsonResult.data.auth).toBe('OK');
+    expect(healthJsonResult.data.messageService).toBe('OK');
+
+    // 2. Publish action
+    let publishJsonResult: any = null;
+    const mockPublishReq: any = {
+      method: 'POST',
+      query: {},
+      headers: { 'x-dev-token': 'paham-dev-2026' },
+      body: {
+        action: 'publish',
+        eventType: 'pami.notification',
+        targetType: 'ALL_ONLINE_USERS',
+        payload: { message: 'Unified endpoint test', mascotState: 'celebrating' },
+      },
+    };
+    const mockPublishRes: any = {
+      setHeader: () => {},
+      status: (code: number) => ({
+        json: (data: any) => {
+          publishJsonResult = { code, data };
+        },
+      }),
+    };
+
+    await unifiedEventsHandler(mockPublishReq, mockPublishRes);
+    expect(publishJsonResult).toBeDefined();
+    expect(publishJsonResult.code).toBe(200);
+    expect(publishJsonResult.data.success).toBe(true);
+
+    // 3. Inbox fetch action
+    let inboxJsonResult: any = null;
+    const mockInboxReq: any = {
+      method: 'GET',
+      query: { action: 'inbox', userId: 'user-a' },
+      headers: {},
+    };
+    const mockInboxRes: any = {
+      setHeader: () => {},
+      status: (code: number) => ({
+        json: (data: any) => {
+          inboxJsonResult = { code, data };
+        },
+      }),
+    };
+
+    await unifiedEventsHandler(mockInboxReq, mockInboxRes);
+    expect(inboxJsonResult).toBeDefined();
+    expect(inboxJsonResult.code).toBe(200);
+    expect(inboxJsonResult.data.notifications.length).toBeGreaterThanOrEqual(1);
   });
 });

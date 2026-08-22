@@ -58,7 +58,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   // Deliver active persistent notifications for this user upon connection/reconnect
   const pendingNotifs = ServerEventStore.getActiveNotificationsForUser(String(userId));
   if (pendingNotifs.length > 0) {
-    pendingNotifs.forEach(notif => {
+    pendingNotifs.forEach((notif: any) => {
       res.write(`event: ${notif.eventType}\ndata: ${JSON.stringify({
         eventId: notif.eventId,
         eventType: notif.eventType,

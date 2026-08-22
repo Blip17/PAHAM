@@ -62,6 +62,16 @@ export const MascotLabView: React.FC = () => {
   const [playSound, setPlaySound] = useState<boolean>(true);
   const [senderName, setSenderName] = useState<string>('Lead Engineer');
   
+  // Target server host selection (Live Vercel vs Localhost)
+  const [targetServerHost, setTargetServerHost] = useState<'LIVE_VERCEL' | 'LOCALHOST' | 'CUSTOM'>('LIVE_VERCEL');
+  const [customServerUrl, setCustomServerUrl] = useState<string>('https://paham-lilac.vercel.app');
+
+  const getEffectiveBaseUrl = () => {
+    if (targetServerHost === 'LIVE_VERCEL') return 'https://paham-lilac.vercel.app';
+    if (targetServerHost === 'LOCALHOST') return '';
+    return customServerUrl.replace(/\/+$/, '');
+  };
+
   // Real-time server telemetry & event stream
   const [onlineCount, setOnlineCount] = useState<number>(1);
   const [serverEvents, setServerEvents] = useState<any[]>([]);
@@ -75,7 +85,8 @@ export const MascotLabView: React.FC = () => {
   // Poll server events & live online clients
   const fetchServerEvents = async () => {
     try {
-      const res = await fetch('/api/events/list?limit=15', {
+      const baseUrl = getEffectiveBaseUrl();
+      const res = await fetch(`${baseUrl}/api/events/list?limit=15`, {
         headers: { 'x-dev-token': devApiClient.getToken() || 'paham-dev-2026' }
       });
       if (res.ok) {
@@ -92,7 +103,7 @@ export const MascotLabView: React.FC = () => {
     fetchServerEvents();
     const interval = setInterval(fetchServerEvents, 3000);
     return () => clearInterval(interval);
-  }, []);
+  }, [targetServerHost, customServerUrl]);
 
   const handleSelectState = (opt: StateOption) => {
     setSelectedState(opt.id);
@@ -103,6 +114,7 @@ export const MascotLabView: React.FC = () => {
   const executeServerPublish = async () => {
     setIsPublishing(true);
     try {
+      const baseUrl = getEffectiveBaseUrl();
       const payloadData = {
         expression: selectedState,
         mascotState: selectedState,
@@ -113,7 +125,7 @@ export const MascotLabView: React.FC = () => {
         senderName: senderName.trim() || 'Developer',
       };
 
-      const res = await fetch('/api/events/publish', {
+      const res = await fetch(`${baseUrl}/api/events/publish`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -131,7 +143,10 @@ export const MascotLabView: React.FC = () => {
       });
 
       const data = await res.json();
-      setLastPublishedResult(data);
+      setLastPublishedResult({
+        ...data,
+        targetHost: baseUrl || 'Localhost (Current Origin)',
+      });
 
       // Also trigger local broadcast channel for immediate fallback
       liveRemoteService.broadcast({
@@ -145,7 +160,11 @@ export const MascotLabView: React.FC = () => {
 
       fetchServerEvents();
     } catch (err: any) {
-      setLastPublishedResult({ success: false, error: err?.message || 'Failed to connect to server' });
+      setLastPublishedResult({
+        success: false,
+        error: err?.message || 'Failed to connect to server endpoint',
+        targetHost: getEffectiveBaseUrl() || 'Localhost',
+      });
     } finally {
       setIsPublishing(false);
       setIsProdConfirmOpen(false);
@@ -185,14 +204,51 @@ export const MascotLabView: React.FC = () => {
           </p>
         </div>
 
-        {/* Real-time online client counter */}
-        <div className="flex items-center gap-3">
+        {/* Real-time online client counter & Host status */}
+        <div className="flex flex-wrap items-center gap-3">
           <div className="flex items-center gap-2 bg-zinc-950 border border-zinc-800 px-3 py-1.5 rounded-lg text-xs">
             <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
             <span className="text-zinc-300">
               Online Clients: <strong className="text-emerald-400 font-mono">{onlineCount}</strong>
             </span>
           </div>
+        </div>
+      </div>
+
+      {/* Target Destination Server Host Bar */}
+      <div className="p-3.5 bg-zinc-950/80 border border-zinc-800 rounded-xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-xs">
+        <div className="flex items-center gap-2">
+          <span className="text-[11px] font-bold text-zinc-400 uppercase tracking-wider">
+            Server Destination:
+          </span>
+          <span className="text-[11px] font-mono text-emerald-400 bg-zinc-900 px-2.5 py-0.5 rounded border border-zinc-800">
+            {getEffectiveBaseUrl() || 'http://localhost:5173 (Localhost)'}
+          </span>
+        </div>
+
+        <div className="flex items-center gap-1.5 self-stretch sm:self-auto">
+          <button
+            onClick={() => setTargetServerHost('LIVE_VERCEL')}
+            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition border flex items-center gap-1.5 ${
+              targetServerHost === 'LIVE_VERCEL'
+                ? 'bg-emerald-600 text-white border-emerald-500 shadow-sm'
+                : 'bg-zinc-900 border-zinc-800 text-zinc-400 hover:text-zinc-200'
+            }`}
+          >
+            <Globe className="w-3 h-3" />
+            <span>🌐 paham-lilac.vercel.app (Live)</span>
+          </button>
+
+          <button
+            onClick={() => setTargetServerHost('LOCALHOST')}
+            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition border flex items-center gap-1.5 ${
+              targetServerHost === 'LOCALHOST'
+                ? 'bg-blue-600 text-white border-blue-500 shadow-sm'
+                : 'bg-zinc-900 border-zinc-800 text-zinc-400 hover:text-zinc-200'
+            }`}
+          >
+            <span>💻 Localhost Dev</span>
+          </button>
         </div>
       </div>
 

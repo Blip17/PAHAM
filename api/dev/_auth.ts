@@ -1,9 +1,20 @@
-// Server-Side Developer Auth & Security Utility for PAHAM Live Dev Cockpit
-// Ensures privileged routes are protected, secrets are redacted, and production is read-only by default
-
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 
 export type PahamEnvironment = 'DEVELOPMENT' | 'STAGING' | 'PRODUCTION';
+
+/**
+ * Handles CORS headers and preflight OPTIONS requests
+ */
+export function applyCors(req: VercelRequest, res: VercelResponse): boolean {
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, x-dev-token, x-confirm-production-destructive');
+  if (req.method === 'OPTIONS') {
+    res.status(200).end();
+    return true;
+  }
+  return false;
+}
 
 export interface DevAuthResult {
   isAuthorized: boolean;

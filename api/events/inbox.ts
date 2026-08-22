@@ -1,10 +1,9 @@
-// Serverless Endpoint: GET/POST /api/events/inbox
-// Manages persistent user notification inbox, cross-session delivery, and dismissal states
-
 import type { VercelRequest, VercelResponse } from '@vercel/node';
+import { applyCors } from '../dev/_auth';
 import { ServerEventStore } from './_store';
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
+  if (applyCors(req, res)) return;
   // GET: Fetch active notifications for user
   if (req.method === 'GET') {
     const { userId = 'guest-anonymous' } = req.query;
@@ -15,7 +14,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       success: true,
       userId: String(userId),
       notifications,
-      unreadCount: notifications.filter(n => n.status !== 'READ').length,
+      unreadCount: notifications.filter((n: any) => n.status !== 'READ').length,
       timestamp: new Date().toISOString(),
     });
   }

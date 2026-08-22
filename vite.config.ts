@@ -1,10 +1,11 @@
 /// <reference types="vitest" />
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
+import { localApiDevPlugin } from './src/dev/server/localApiServer';
 
 // https://vite.dev/config/
 export default defineConfig({
-  plugins: [react()],
+  plugins: [react(), localApiDevPlugin()],
   build: {
     chunkSizeWarningLimit: 600,
     rollupOptions: {

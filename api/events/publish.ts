@@ -1,11 +1,10 @@
-// Serverless Endpoint: POST /api/events/publish
-// Authorizes developer action and broadcasts persistent events to all live connected Paham clients
-
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { requireDevAuth, sanitizeDevPayload } from '../dev/_auth';
+import { requireDevAuth, sanitizeDevPayload, applyCors } from '../dev/_auth';
 import { ServerEventStore, EventTargetType, EventPriority } from './_store';
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
+  if (applyCors(req, res)) return;
+
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method Not Allowed' });
   }

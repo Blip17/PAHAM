@@ -1,11 +1,9 @@
-// Serverless Endpoint: GET /api/events/list
-// Returns complete real-time server event history and connected online client telemetry for Dev Cockpit
-
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { requireDevAuth, sanitizeDevPayload } from '../dev/_auth';
+import { requireDevAuth, sanitizeDevPayload, applyCors } from '../dev/_auth';
 import { ServerEventStore } from './_store';
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
+  if (applyCors(req, res)) return;
   if (req.method !== 'GET') {
     return res.status(405).json({ error: 'Method Not Allowed' });
   }
@@ -17,7 +15,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   const events = ServerEventStore.getEvents(Number(limit), eventType ? String(eventType) : undefined);
   const onlineCount = ServerEventStore.getOnlineCount(auth.environment);
-  const onlineClients = ServerEventStore.getOnlineClients().map(c => ({
+  const onlineClients = ServerEventStore.getOnlineClients().map((c: any) => ({
     clientId: c.clientId,
     userId: c.userId,
     environment: c.environment,

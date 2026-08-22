@@ -195,8 +195,10 @@ class RealtimeClient {
     }, delay);
   }
 
+  private seenEventIds: Set<string> = new Set();
+
   /**
-   * Resilient polling fallback if SSE is disconnected
+   * Resilient polling fallback if SSE is disconnected or running on serverless
    */
   private startPollingFallback() {
     if (this.activePollingInterval) return;
@@ -206,8 +208,16 @@ class RealtimeClient {
         const notifs = await this.fetchInbox(this.currentUserId);
         if (notifs && notifs.length > 0) {
           notifs.forEach(notif => {
+            const notifKey = notif.id || notif.eventId;
+            if (notifKey && this.seenEventIds.has(notifKey)) {
+              return; // Already delivered
+            }
+            if (notifKey) {
+              this.seenEventIds.add(notifKey);
+            }
+
             this.dispatch(notif.eventType || 'pami.notification', {
-              eventId: notif.eventId,
+              eventId: notif.eventId || notif.id,
               eventType: notif.eventType,
               priority: notif.priority,
               payload: notif.payload,
@@ -216,7 +226,7 @@ class RealtimeClient {
           });
         }
       } catch {}
-    }, 8000);
+    }, 3500);
   }
 
   private stopPollingFallback() {

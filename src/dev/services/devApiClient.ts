@@ -42,6 +42,20 @@ class DevApiClient {
     ? (localStorage.getItem('paham_dev_token') || 'paham-dev-2026') 
     : 'paham-dev-2026';
   private detectedEnvironment: PahamEnvironment = import.meta.env?.PROD ? 'PRODUCTION' : 'DEVELOPMENT';
+  private targetBaseUrl: string = (typeof window !== 'undefined' && window.location.hostname.includes('vercel.app'))
+    ? '' 
+    : (typeof window !== 'undefined' && localStorage.getItem('paham_dev_target_host')) || 'https://paham-lilac.vercel.app';
+
+  public setTargetBaseUrl(url: string) {
+    this.targetBaseUrl = url.replace(/\/+$/, '');
+    if (typeof window !== 'undefined' && typeof localStorage !== 'undefined') {
+      localStorage.setItem('paham_dev_target_host', this.targetBaseUrl);
+    }
+  }
+
+  public getTargetBaseUrl(): string {
+    return this.targetBaseUrl;
+  }
 
   public setToken(token: string) {
     this.token = token;

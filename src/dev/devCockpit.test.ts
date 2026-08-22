@@ -8,6 +8,9 @@ import { devAuditLogger } from './services/devAuditLogger';
 import { devErrorTracker } from './services/devErrorTracker';
 import { devAiLogger } from './services/devAiLogger';
 import { liveRemoteService } from './services/liveRemoteService';
+import { devApiClient } from './services/devApiClient';
+import { sanitizeDevPayload } from '../../api/dev/_auth';
+import { REPLAY_JOURNEYS } from '../../api/dev/replay';
 import { db } from '../core/db';
 
 describe('PAHAM Internal Developer Cockpit Suite', () => {
@@ -148,5 +151,57 @@ describe('PAHAM Internal Developer Cockpit Suite', () => {
     expect(receivedPayload).toBeNull();
 
     unsub();
+  });
+
+  // ── 8. Live Dev API Client & Environment Separation ───────────────────────
+  it('detects active environment and provides authenticated telemetry client', async () => {
+    const env = devApiClient.getEnvironment();
+    expect(['DEVELOPMENT', 'STAGING', 'PRODUCTION']).toContain(env);
+
+    const loginRes = await devApiClient.login('paham-dev-2026');
+    expect(loginRes.success).toBe(true);
+
+    const telemetry = await devApiClient.fetchTelemetry();
+    expect(telemetry).toBeDefined();
+    expect(telemetry.services.database.tablesCount).toBe(18);
+    expect(telemetry.status).toBe('HEALTHY');
+  });
+
+  // ── 9. Server-Side Secret Redaction & Sanitization ────────────────────────
+  it('redacts sensitive API keys and secrets from dev payloads', () => {
+    const rawSecretData = {
+      apiKey: 'AIzaSyD-secret-key-1234567890abcdef',
+      user: {
+        email: 'test@paham.id',
+        password_hash: 'argon2$secretpassword',
+        authSecret: 'super-secret-jwt-token',
+      },
+      message: 'Calling Gemini with key AIzaSyD-1234567890abcdef1234567890abcdef',
+    };
+
+    const sanitized = sanitizeDevPayload(rawSecretData);
+    expect(sanitized.apiKey).toBe('[REDACTED_SECRET]');
+    expect(sanitized.user.password_hash).toBe('[REDACTED_SECRET]');
+    expect(sanitized.user.authSecret).toBe('[REDACTED_SECRET]');
+    expect(sanitized.message).not.toContain('AIzaSyD-1234567890abcdef1234567890abcdef');
+    expect(sanitized.message).toContain('[REDACTED_API_KEY]');
+  });
+
+  // ── 10. Replay Studio Journey State Machine ───────────────────────────────
+  it('reproduces struggling student journey and activates rescue rule upon mistake spike', () => {
+    const rescueJourney = REPLAY_JOURNEYS.STRUGGLING_STUDENT_RESCUE;
+    expect(rescueJourney).toBeDefined();
+    expect(rescueJourney.steps.length).toBeGreaterThanOrEqual(6);
+
+    // Verify step sequence
+    const step1 = rescueJourney.steps[0];
+    expect(step1.stageName).toBe('USER CREATED');
+    expect(step1.stateSnapshot.mistakesCount).toBe(0);
+
+    // Verify mistake spike triggers recommendation
+    const recStep = rescueJourney.steps.find(s => s.stateSnapshot.activeRuleId === 'RULE_STUDY_RESCUE');
+    expect(recStep).toBeDefined();
+    expect(recStep?.stateSnapshot.pikoEmotion).toBe('recommending');
+    expect(recStep?.stateSnapshot.pikoSpeech).toContain('Diskriminan');
   });
 });

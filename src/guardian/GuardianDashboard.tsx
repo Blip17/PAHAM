@@ -27,8 +27,6 @@ import { Button } from '../components/ui/Button';
 
 export const GuardianDashboard: React.FC = () => {
   const isDev = import.meta.env.DEV || (typeof window !== 'undefined' && window.localStorage.getItem('paham_dev_mode') === 'true');
-  if (!isDev) return null;
-
   const [isOpen, setIsOpen] = useState<boolean>(false);
   const [report, setReport] = useState<GuardianReport | null>(null);
   const [isRunning, setIsRunning] = useState<boolean>(false);
@@ -46,6 +44,7 @@ export const GuardianDashboard: React.FC = () => {
   };
 
   useEffect(() => {
+    if (!isDev) return;
     // Check if auto-open requested via URL or session
     if (typeof window !== 'undefined' && (window.location.search.includes('guardian=true') || window.location.hash.includes('guardian'))) {
       runAudit();
@@ -73,7 +72,9 @@ export const GuardianDashboard: React.FC = () => {
       window.removeEventListener('keydown', handleKeyDown);
       window.removeEventListener('open-guardian-dashboard', handleCustomOpen);
     };
-  }, []);
+  }, [isDev]);
+
+  if (!isDev) return null;
 
   const filteredFindings = report?.findings.filter(f => {
     if (activeCategory === 'ALL') return true;

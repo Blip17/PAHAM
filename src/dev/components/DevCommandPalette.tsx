@@ -76,6 +76,13 @@ export const DevCommandPalette: React.FC<{
       action: () => { onNavigateTab('scenarios'); onClose(); },
     },
     {
+      id: 'nav-replay',
+      title: 'Replay Studio (Time-Travel Learning Journey)',
+      category: 'NAVIGATION',
+      icon: <Layers className="w-4 h-4 text-purple-400" />,
+      action: () => { onNavigateTab('replay'); onClose(); },
+    },
+    {
       id: 'nav-simulator',
       title: 'User Simulator (9 Student Archetypes)',
       category: 'NAVIGATION',

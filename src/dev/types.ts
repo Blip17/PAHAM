@@ -3,6 +3,7 @@
 
 export type DevCockpitTab = 
   | 'overview'
+  | 'replay'
   | 'database'
   | 'schema'
   | 'events'

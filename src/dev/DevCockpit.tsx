@@ -20,10 +20,14 @@ import {
   ArrowLeft,
   Lock,
   Sparkles,
-  Command
+  Command,
+  History,
+  ShieldAlert,
+  Radio
 } from 'lucide-react';
 import { DevCockpitTab } from './types';
 import { DevHomeView } from './views/DevHomeView';
+import { ReplayStudioView } from './views/ReplayStudioView';
 import { DatabaseExplorerView } from './views/DatabaseExplorerView';
 import { DatabaseSchemaView } from './views/DatabaseSchemaView';
 import { EventLabView } from './views/EventLabView';
@@ -39,6 +43,8 @@ import { ApiExplorerView } from './views/ApiExplorerView';
 import { JobMonitorView } from './views/JobMonitorView';
 import { AuditLogView } from './views/AuditLogView';
 import { DevCommandPalette } from './components/DevCommandPalette';
+import { devApiClient, PahamEnvironment, LiveTelemetryResponse } from './services/devApiClient';
+import { devStreamService } from './services/devStreamService';
 import { UserProfile } from '../core/types';
 
 interface DevCockpitProps {
@@ -55,6 +61,8 @@ export const DevCockpit: React.FC<DevCockpitProps> = ({
   const isDevEnv = import.meta.env.DEV;
   const [activeTab, setActiveTab] = useState<DevCockpitTab>('overview');
   const [isPaletteOpen, setIsPaletteOpen] = useState<boolean>(false);
+  const [environment, setEnvironment] = useState<PahamEnvironment>(devApiClient.getEnvironment());
+  const [liveTelemetry, setLiveTelemetry] = useState<LiveTelemetryResponse | null>(null);
   const [isAuthorized, setIsAuthorized] = useState<boolean>(() => {
     if (isDevEnv) return true;
     return typeof window !== 'undefined' && window.sessionStorage.getItem('paham_dev_auth') === 'paham-dev-active';
@@ -62,14 +70,28 @@ export const DevCockpit: React.FC<DevCockpitProps> = ({
   const [authPin, setAuthPin] = useState<string>('');
   const [authError, setAuthError] = useState<string>('');
 
-  const handleAuthorize = (e: React.FormEvent) => {
+  // Subscribe to live telemetry stream
+  useEffect(() => {
+    if (!isAuthorized) return;
+    const unsub = devStreamService.subscribe(data => {
+      setLiveTelemetry(data);
+      if (data.environment) {
+        setEnvironment(data.environment);
+      }
+    });
+    return () => unsub();
+  }, [isAuthorized]);
+
+  const handleAuthorize = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (authPin.trim() === 'paham-dev-2026' || authPin.trim() === 'dev') {
+    const res = await devApiClient.login(authPin.trim());
+    if (res.success) {
       window.sessionStorage.setItem('paham_dev_auth', 'paham-dev-active');
       setIsAuthorized(true);
+      setEnvironment(res.environment);
       setAuthError('');
     } else {
-      setAuthError('Kunci otorisasi pengembang salah. Akses ditolak.');
+      setAuthError(res.error || 'Kunci otorisasi pengembang salah. Akses ditolak.');
     }
   };
 
@@ -160,6 +182,7 @@ export const DevCockpit: React.FC<DevCockpitProps> = ({
     {
       groupName: 'LABS & SIMULATION',
       items: [
+        { id: 'replay', label: 'Replay Studio', icon: <History className="w-4 h-4 text-purple-400" />, badge: 'Time-Travel' },
         { id: 'simulator', label: 'User Simulator', icon: <Users className="w-4 h-4 text-amber-400" />, badge: '9 presets' },
         { id: 'events', label: 'Event Lab', icon: <Zap className="w-4 h-4 text-purple-400" /> },
         { id: 'scenarios', label: 'Event Sequence', icon: <Layers className="w-4 h-4 text-purple-400" /> },
@@ -221,16 +244,37 @@ export const DevCockpit: React.FC<DevCockpitProps> = ({
           </button>
         </div>
 
-        {/* Right: Telemetry Strip & Active Session */}
+        {/* Right: Environment Indicator, Latency Strip & Active Session */}
         <div className="flex items-center gap-2.5 text-xs">
           {activeProfile && (
-            <span className="text-[11px] text-zinc-400 hidden lg:inline-block">
+            <span className="text-[11px] text-zinc-400 hidden xl:inline-block">
               Impersonating: <strong className="text-emerald-300">{activeProfile.displayName || activeProfile.name}</strong>
             </span>
           )}
-          <span className="px-2 py-0.5 rounded text-[10px] bg-zinc-800 text-zinc-300 border border-zinc-700 font-bold">
-            DEV MODE
-          </span>
+
+          {/* Live Latency Pill */}
+          <div className="hidden sm:flex items-center gap-1 px-2 py-0.5 rounded text-[10px] bg-zinc-950 text-zinc-400 border border-zinc-800">
+            <Radio className="w-2.5 h-2.5 text-emerald-400 animate-pulse" />
+            <span>{liveTelemetry ? `${liveTelemetry.services.api.latencyMs}ms` : '14ms'}</span>
+          </div>
+
+          {/* Environment Separator Badge */}
+          {environment === 'PRODUCTION' ? (
+            <span className="px-2.5 py-1 rounded text-[10px] bg-rose-950 text-rose-300 border border-rose-700 font-bold flex items-center gap-1 shadow-sm">
+              <ShieldAlert className="w-3 h-3 text-rose-400" />
+              <span>PROD (READ-ONLY)</span>
+            </span>
+          ) : environment === 'STAGING' ? (
+            <span className="px-2.5 py-1 rounded text-[10px] bg-blue-950 text-blue-300 border border-blue-700 font-bold flex items-center gap-1">
+              <Activity className="w-3 h-3 text-blue-400" />
+              <span>STAGING</span>
+            </span>
+          ) : (
+            <span className="px-2.5 py-1 rounded text-[10px] bg-emerald-950 text-emerald-300 border border-emerald-700 font-bold flex items-center gap-1.5">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping" />
+              <span>DEV (READ/WRITE)</span>
+            </span>
+          )}
         </div>
 
       </header>
@@ -283,6 +327,7 @@ export const DevCockpit: React.FC<DevCockpitProps> = ({
         <main className="flex-1 p-4 sm:p-6 overflow-y-auto bg-zinc-950">
           <div className="max-w-6xl mx-auto">
             {activeTab === 'overview' && <DevHomeView onNavigateTab={setActiveTab} />}
+            {activeTab === 'replay' && <ReplayStudioView />}
             {activeTab === 'database' && <DatabaseExplorerView />}
             {activeTab === 'schema' && <DatabaseSchemaView />}
             {activeTab === 'events' && <EventLabView />}
